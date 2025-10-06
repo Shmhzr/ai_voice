@@ -1,5 +1,4 @@
 # app/orders_store.py
-
 import os, json, threading
 from datetime import datetime
 
@@ -11,34 +10,46 @@ def init_store():
     """Create a fresh orders.json with empty list every time server starts."""
     with _lock:
         data = {"orders": []}
-        with open(ORDERS_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        _write_unlocked(data)
     return ORDERS_PATH
 
 def clear_store():
     """Wipe all orders (used on graceful shutdown)."""
     with _lock:
-        with open(ORDERS_PATH, "w", encoding="utf-8") as f:
-            json.dump({"orders": []}, f, ensure_ascii=False, indent=2)
+        _write_unlocked({"orders": []})
     print("🧹 Cleared orders.json on shutdown")
+
+def _ensure_file_unlocked():
+    if not os.path.exists(ORDERS_PATH):
+        _write_unlocked({"orders": []})
+
+def _read_unlocked():
+    _ensure_file_unlocked()
+    with open(ORDERS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def _write_unlocked(data):
+    tmp = ORDERS_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, ORDERS_PATH)
 
 def _read():
     with _lock:
-        if not os.path.exists(ORDERS_PATH):
-            init_store()
-        with open(ORDERS_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+        return _read_unlocked()
 
 def _write(data):
     with _lock:
-        with open(ORDERS_PATH, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        _write_unlocked(data)
 
 def add_order(order: dict):
     """Append a new order. Must include: order_number, phone, items, total, status, created_at."""
-    data = _read()
-    data["orders"].append(order)
-    _write(data)
+    with _lock:
+        data = _read_unlocked()
+        data["orders"].append(order)
+        _write_unlocked(data)
 
 def list_recent_orders(limit: int = 50):
     data = _read()
@@ -58,13 +69,14 @@ def get_order_phone(order_number: str) -> str | None:
     return None
 
 def set_order_status(order_number: str, status: str) -> bool:
-    data = _read()
-    for o in data["orders"]:
-        if o.get("order_number") == order_number:
-            o["status"] = status
-            _write(data)
-            return True
-    return False
+    with _lock:
+        data = _read_unlocked()
+        for o in data["orders"]:
+            if o.get("order_number") == order_number:
+                o["status"] = status
+                _write_unlocked(data)
+                return True
+        return False
 
 def get_order(order_number: str) -> dict | None:
     """Return full order dict by order_number."""
@@ -87,11 +99,7 @@ def count_active_orders_for_phone(phone_e164: str) -> int:
     if not phone_e164:
         return 0
     data = _read()
-    count = 0
-    for o in data["orders"]:
-        if o.get("phone") == phone_e164 and o.get("status") != "ready":
-            count += 1
-    return count
+    return sum(1 for o in data["orders"] if o.get("phone") == phone_e164 and o.get("status") != "ready")
 
 def count_active_drinks_for_phone(phone_e164: str) -> int:
     """Count total number of drinks across all active orders (status != ready) for a phone."""
@@ -101,8 +109,7 @@ def count_active_drinks_for_phone(phone_e164: str) -> int:
     total_drinks = 0
     for o in data["orders"]:
         if o.get("phone") == phone_e164 and o.get("status") != "ready":
-            items = o.get("items", [])
-            total_drinks += len(items)
+            total_drinks += len(o.get("items", []))
     return total_drinks
 
 def now_iso():

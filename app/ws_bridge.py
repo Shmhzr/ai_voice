@@ -1,213 +1,383 @@
 # app/ws_bridge.py
+import os
+import json
+import base64
+import logging
+import asyncio
+import contextlib
+import time
+import inspect
+from typing import Optional
 
-import os, json, base64, asyncio
-from fastapi import FastAPI, WebSocket
-from starlette.websockets import WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from .agent_client import connect_agent, send_agent_settings
-from .agent_functions import FUNCTION_MAP, session_state
-from .business_logic import finalize_order, discard_pending_order
-from .send_sms import send_received_sms
+from .session import sessions
+from .events import publish
 from .audio import (
     ulaw8k_to_lin16_48k,
     lin16_24k_to_ulaw8k,
     chunk_bytes,
     TWILIO_FRAME_BYTES,
 )
+from .agent_client import connect_agent, send_agent_settings
+from .agent_functions import FUNCTION_MAP
 from .orders_store import add_order
-from .events import publish
+from .send_sms import send_received_sms
+from . import business_logic as bl
 
-def register_ws_routes(app: FastAPI):
+log = logging.getLogger("ws_bridge")
+router = APIRouter()
 
-    @app.websocket("/twilio")
-    async def twilio_agent(ws: WebSocket):
-        await ws.accept()
-        print("✅ Twilio WebSocket connected")
+# ========== ENV / TOGGLES ==========
+DG_AUDIO_BRIDGE = os.getenv("DG_AUDIO_BRIDGE", "true").lower() not in ("0", "false", "no")
+LOG_AGENT_EVENTS = os.getenv("LOG_AGENT_EVENTS", "1").lower() not in ("0", "false", "no")
+LOG_AGENT_AUDIO  = os.getenv("LOG_AGENT_AUDIO",  "0").lower() not in ("0", "false", "no")
+LOG_TOOL_MAXLEN  = int(os.getenv("LOG_TOOL_MAXLEN", "800").split()[0])
 
-        agent = await connect_agent()
-        await send_agent_settings(agent)
+CLOSE_ON_PHRASE   = os.getenv("CLOSE_ON_PHRASE", "1").lower() not in ("0", "false", "no")
+CLOSING_PHRASE_ENV = os.getenv("CLOSING_PHRASE", "Goodbye!").strip()
+HANGUP_DELAY_MS = int(os.getenv("HANGUP_DELAY_MS", "2000").split()[0])
 
-        stream_sid = None
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN  = os.getenv("TWILIO_AUTH_TOKEN")
 
-        # resampler states
-        twilio_to_agent_state = None
-        agent_to_twilio_state = None
+# ========== PHRASE NORMALIZATION ==========
+def _norm_text(s: str) -> str:
+    if not s:
+        return ""
+    rep = {"’": "'", "‘": "'", "“": '"', "”": '"', "—": "-", "–": "-", "\u00A0": " "}
+    for a, b in rep.items():
+        s = s.replace(a, b)
+    return " ".join(s.lower().strip().split())
 
-        async def finalize_and_send_sms():
-            """
-            Finalize order on hangup:
-            - Only finalize if phone was explicitly confirmed AND order number exists
-            - Finalize the order (persist to orders.json)
-            - Send SMS confirmation
-            - Publish event to dashboards
-            """
-            if session_state.get("received_sms_sent"):
-                print("ℹ️ SMS already sent, skipping finalization")
-                return
-            
-            if not session_state.get("phone_confirmed"):
-                print("ℹ️ Phone not confirmed, discarding order")
-                # Discard any pending order
-                order_no = session_state.get("order_number")
-                if order_no:
-                    discard_pending_order(order_no)
-                return
+EXACT_CLOSE_NORM = _norm_text(CLOSING_PHRASE_ENV)
 
-            phone = session_state.get("phone_number")
-            order_no = session_state.get("order_number")
-            
-            if not phone or not order_no:
-                print("ℹ️ Missing phone or order number, cannot finalize")
-                return
+# ========== DG message keys/types ==========
+DG_KEY_TYPE                 = "type"
+DG_TYPE_WELCOME             = "Welcome"
+DG_TYPE_SETTINGS_APPLIED    = "SettingsApplied"
+DG_TYPE_ERROR               = "Error"
+DG_TYPE_CONV_TEXT           = "ConversationText"
+DG_TYPE_HISTORY             = "History"
+DG_TYPE_FUNCTION_CALL_REQ   = "FunctionCallRequest"
+DG_TYPE_FUNCTION_CALL_RESP  = "FunctionCallResponse"
+DG_TYPE_AGENT_AUDIO_DONE    = "AgentAudioDone"
+DG_TYPE_USER_STARTED        = "UserStartedSpeaking"
 
-            print(f"📱 Finalizing order on hangup...")
-            print(f"   Phone: {phone}")
-            print(f"   Order: {order_no}")
+# ========== Twilio helpers ==========
+def _twilio_media_payload(ulaw8k_bytes: bytes, stream_sid: str) -> str:
+    return json.dumps({
+        "event": "media",
+        "streamSid": stream_sid,
+        "media": {"payload": base64.b64encode(ulaw8k_bytes).decode("ascii")}
+    })
 
-            try:
-                # Finalize the order (commit from pending)
-                result = finalize_order(order_no)
-                
-                if not result.get("ok"):
-                    print(f"❌ Failed to finalize order: {result.get('error')}")
-                    return
-                
-                # Persist to orders.json
-                add_order({
-                    "order_number": result["order_number"],
-                    "phone": result.get("phone"),
-                    "items": result.get("items") or [],
-                    "total": result.get("total", 0.0),
-                    "status": result.get("status", "received"),
-                    "created_at": result.get("created_at"),
-                })
-                
-                # Publish to dashboards
-                publish({
-                    "type": "order_created",
-                    "order_number": result["order_number"],
-                    "status": "received"
-                })
-                
-                print(f"✅ Order finalized: {order_no}")
-                
-                # Send confirmation SMS
-                try:
-                    send_received_sms(order_no=order_no, to_phone_no=phone)
-                    session_state["received_sms_sent"] = True
-                    print(f"✅ Confirmation SMS sent to {phone}")
-                except Exception as e:
-                    print(f"❌ Error sending confirmation SMS: {e}")
-                    
-            except Exception as e:
-                print(f"❌ Error during finalization: {e}")
+_twilio_client = None
+def _get_twilio_client():
+    global _twilio_client
+    if _twilio_client is None and TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+        from twilio.rest import Client
+        _twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    return _twilio_client
 
-        async def agent_to_twilio_task():
-            nonlocal agent_to_twilio_state
+async def _hangup_call(call_sid: str):
+    try:
+        client = _get_twilio_client()
+        if not client:
+            log.warning(f"[{call_sid}] Twilio client not configured; cannot hang up.")
+            return
+        client.calls(call_sid).update(status="completed")
+        log.info(f"[{call_sid}] ☎️  Hangup requested (status=completed).")
+    except Exception as e:
+        log.warning(f"[{call_sid}] hangup failed: {e}")
+
+# Debounce: avoid duplicate finalize/hangup
+_HUNG_UP: set[str] = set()
+_HANGUP_INFLIGHT: set[str] = set()
+
+# ========== Tool execution ==========
+async def execute_agent_function(tool_name: str, args: dict, *, call_sid: str):
+    fn = FUNCTION_MAP.get(tool_name)
+    if not fn:
+        return {"ok": False, "error": f"Unknown tool: {tool_name}"}
+
+    if isinstance(args, str):
+        try:
+            args = json.loads(args) if args else {}
+        except Exception:
+            args = {}
+    args = dict(args or {})
+    args.setdefault("call_sid", call_sid)
+
+    try:
+        sig = inspect.signature(fn)
+        accepted = {k: v for k, v in args.items() if k in sig.parameters}
+    except Exception:
+        accepted = args
+
+    async def _run():
+        if inspect.iscoroutinefunction(fn):
+            return await fn(**accepted)
+        return fn(**accepted)  # type: ignore
+
+    try:
+        return await asyncio.wait_for(_run(), timeout=8.0)
+    except asyncio.TimeoutError:
+        log.exception(f"[{call_sid}] tool {tool_name} timed out")
+        return {"ok": False, "error": "tool_timeout"}
+    except Exception as e:
+        log.exception(f"[{call_sid}] tool {tool_name} failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+# ========== Finalize & notify ==========
+async def _finalize_and_notify(call_sid: str):
+    s = await sessions.get(call_sid)
+    if not s or s.received_sms_sent or not s.order_number or not s.phone_confirmed or not s.phone:
+        return
+
+    fin = await bl.finalize_order(s.order_number, call_sid=call_sid)
+    if not (isinstance(fin, dict) and fin.get("ok")):
+        log.error(f"[{call_sid}] finalize failed: {fin}")
+        return
+
+    order = {
+        "order_number": fin["order_number"],
+        "phone": fin.get("phone") or s.phone,
+        "items": fin.get("items") or [],
+        "total": 0.0,
+        "status": fin.get("status", "received"),
+        "created_at": fin.get("created_at", int(time.time())),
+    }
+
+    add_order(order)
+    await publish("orders", {"type": "order_created", "order_number": order["order_number"], "status": order["status"]})
+
+    try:
+        send_received_sms(order["order_number"], order["phone"])
+        s.received_sms_sent = True
+        log.info(f"[{call_sid}] ✅ SMS(sent) and order persisted ({order['order_number']})")
+    except Exception as e:
+        log.warning(f"[{call_sid}] SMS failed: {e}")
+
+async def _finalize_and_hangup(call_sid: str):
+    if call_sid in _HUNG_UP or call_sid in _HANGUP_INFLIGHT:
+        return
+    _HANGUP_INFLIGHT.add(call_sid)
+    try:
+        await _finalize_and_notify(call_sid)
+        if HANGUP_DELAY_MS > 0:
+            await asyncio.sleep(HANGUP_DELAY_MS / 1000.0)
+        await _hangup_call(call_sid)
+        _HUNG_UP.add(call_sid)
+    finally:
+        _HANGUP_INFLIGHT.discard(call_sid)
+
+# ========== Main Twilio endpoint ==========
+@router.websocket("/twilio")
+async def twilio_ws(ws: WebSocket):
+    await ws.accept()
+    call_sid: str = "unknown"
+    stream_sid: Optional[str] = None
+
+    agent = None
+    agent_reader_task = None
+    rx_state = None
+
+    # meter
+    ts_last = time.time()
+    frames_last_sec = 0
+
+    async def media_meter():
+        nonlocal ts_last, frames_last_sec
+        while True:
+            await asyncio.sleep(1.0)
+            now = time.time()
+            if now - ts_last >= 1.0:
+                log.info(f"[{call_sid}] Twilio media frames last 1s: {frames_last_sec}")
+                ts_last = now
+                frames_last_sec = 0
+
+    meter_task = asyncio.create_task(media_meter())
+
+    # --- inner agent reader (graceful cancel/close) ---
+    async def _agent_reader():
+        nonlocal stream_sid
+        tx_state = None
+        assistant_buf: list[str] = []
+
+        # import here to avoid hard dep at module import time
+        from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
+
+        try:
             async for message in agent:
-                # Agent audio: linear16@24k → Twilio μ-law/8k
+                # Binary audio from Agent (linear16@24k)
                 if isinstance(message, (bytes, bytearray)):
-                    if not stream_sid: continue
-                    ulaw8k, agent_to_twilio_state = lin16_24k_to_ulaw8k(message, agent_to_twilio_state)
-                    for frame in chunk_bytes(ulaw8k, TWILIO_FRAME_BYTES):
-                        if not frame: continue
-                        await ws.send_text(json.dumps({
-                            "event": "media",
-                            "streamSid": stream_sid,
-                            "media": {"payload": base64.b64encode(frame).decode("ascii")}
-                        }))
+                    if not DG_AUDIO_BRIDGE or not stream_sid:
+                        continue
+                    if LOG_AGENT_AUDIO:
+                        log.info(f"[{call_sid}] (agent audio {len(message)} bytes)")
+                    ulaw8k, tx_state = lin16_24k_to_ulaw8k(message, tx_state)
+                    for chunk in chunk_bytes(ulaw8k, TWILIO_FRAME_BYTES):
+                        if not chunk:
+                            continue
+                        try:
+                            await ws.send_text(_twilio_media_payload(chunk, stream_sid))
+                        except Exception:
+                            return
                     continue
 
-                # Text events (incl. function calls)
+                # JSON events
                 try:
                     evt = json.loads(message)
                 except Exception:
                     continue
 
-                etype = evt.get("type")
+                etype = evt.get(DG_KEY_TYPE)
 
-                if etype == "UserStartedSpeaking" and stream_sid:
-                    await ws.send_text(json.dumps({"event": "clear", "streamSid": stream_sid}))
+                if etype in (DG_TYPE_WELCOME, DG_TYPE_SETTINGS_APPLIED, DG_TYPE_ERROR, DG_TYPE_USER_STARTED):
+                    if LOG_AGENT_EVENTS:
+                        log.info(f"[{call_sid}] Agent: {json.dumps(evt)}")
                     continue
 
-                if etype == "FunctionCallRequest":
+                if etype in (DG_TYPE_CONV_TEXT, DG_TYPE_HISTORY):
+                    if LOG_AGENT_EVENTS:
+                        log.info(f"[{call_sid}] Agent: {json.dumps(evt)}")
+                    if (evt.get("role") or "").lower() == "assistant":
+                        assistant_buf.append(evt.get("content") or "")
+                    continue
+
+                if etype == DG_TYPE_AGENT_AUDIO_DONE:
+                    if LOG_AGENT_EVENTS:
+                        log.info(f"[{call_sid}] Agent: {json.dumps(evt)}")
+                    if CLOSE_ON_PHRASE and assistant_buf:
+                        full_text_norm = _norm_text(" ".join(assistant_buf))
+                        if EXACT_CLOSE_NORM in full_text_norm:
+                            log.info(f"[{call_sid}] 🔔 Closing sentence found in full utterance. Finalizing + hangup…")
+                            asyncio.create_task(_finalize_and_hangup(call_sid))
+                    assistant_buf.clear()
+                    continue
+
+                if etype == DG_TYPE_FUNCTION_CALL_REQ:
                     for fc in evt.get("functions", []):
                         if fc.get("client_side") is False:
                             continue
                         fn_id   = fc.get("id")
                         fn_name = fc.get("name")
                         raw_args = fc.get("arguments") or "{}"
-                        try:
-                            args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
-                        except Exception:
-                            args = {}
-                        print(f"🛠️  FunctionCallRequest → {fn_name}({args})")
-                        try:
-                            if fn_name in FUNCTION_MAP:
-                                result = FUNCTION_MAP[fn_name](**args)
-                                resp = {"type":"FunctionCallResponse","id":fn_id,"name":fn_name,
-                                        "content": json.dumps(result) if not isinstance(result,str) else result}
-                            else:
-                                resp = {"type":"FunctionCallResponse","id":fn_id,"name":fn_name or "unknown",
-                                        "content": json.dumps({"ok":False,"error":f"Unknown function '{fn_name}'"})}
-                            await agent.send(json.dumps(resp))
-                            print(f"✅ FunctionCallResponse ← {fn_name}: {resp['content']}")
-                        except Exception as e:
-                            err = {"type":"FunctionCallResponse","id":fn_id,"name":fn_name or "unknown",
-                                   "content": json.dumps({"ok":False,"error":str(e)})}
-                            await agent.send(json.dumps(err))
-                            print(f"❌ Function handler error: {e}")
+                        if LOG_AGENT_EVENTS:
+                            a = raw_args if isinstance(raw_args, str) else json.dumps(raw_args)
+                            log.info(f"[{call_sid}] 🔧 function.call {fn_name}({a[:LOG_TOOL_MAXLEN]})")
+
+                        result = await execute_agent_function(fn_name, raw_args, call_sid=call_sid)
+                        resp = {
+                            "type": DG_TYPE_FUNCTION_CALL_RESP,
+                            "id": fn_id,
+                            "name": fn_name,
+                            "content": json.dumps(result) if not isinstance(result, str) else result,
+                        }
+                        await agent.send(json.dumps(resp))
+                        if LOG_AGENT_EVENTS:
+                            log.info(f"[{call_sid}] 🔧 function.result {fn_name}: {resp['content'][:LOG_TOOL_MAXLEN]}")
                     continue
 
-                print("[agent]", evt)
+                if LOG_AGENT_EVENTS:
+                    log.info(f"[{call_sid}] Agent: {json.dumps(evt)}")
 
-        forward_task = asyncio.create_task(agent_to_twilio_task())
+        except asyncio.CancelledError:
+            # Graceful: task was cancelled during shutdown/hangup
+            log.debug(f"[{call_sid}] agent reader cancelled")
+            return
+        except (ConnectionClosedOK, ConnectionClosedError):
+            # Agent ws closed first—normal during hangup
+            log.debug(f"[{call_sid}] agent websocket closed")
+            return
 
-        try:
-            async for raw in ws.iter_text():
+    try:
+        while True:
+            try:
+                raw = await ws.receive_text()
+                msg = json.loads(raw)
+            except WebSocketDisconnect:
+                raise
+            except Exception:
+                continue
+
+            ev = msg.get("event")
+
+            if ev == "start":
+                stream_sid = msg["start"]["streamSid"]
+                params = msg["start"].get("customParameters", {}) or {}
+                call_sid = params.get("call_sid", "unknown")
+
+                await sessions.set_stream_sid(call_sid, stream_sid)
+
+                s = await sessions.get_or_create(call_sid)
+                s.order = {}
+                s.order_number = None
+                s.pending_item = None
+                s.phone = None
+                s.phone_confirmed = False
+                s.received_sms_sent = False
+                s.dg_request_id = None
+                _HUNG_UP.discard(call_sid)
+                _HANGUP_INFLIGHT.discard(call_sid)
+
+                agent = await connect_agent()
+                await send_agent_settings(agent)
+                agent_reader_task = asyncio.create_task(_agent_reader())
+
+                log.info(f"[{call_sid}][{stream_sid}] Twilio start; Agent connected & configured")
+
+            elif ev == "media":
+                frames_last_sec += 1
+                if not DG_AUDIO_BRIDGE or not agent:
+                    continue
                 try:
-                    evt = json.loads(raw)
+                    payload_b64 = msg["media"]["payload"]
+                    ulaw8k = base64.b64decode(payload_b64)
+                    lin48k, rx_state = ulaw8k_to_lin16_48k(ulaw8k, rx_state)
                 except Exception:
                     continue
-
-                etype = evt.get("event")
-                if etype != "media":
-                    print(f"[twilio evt] {etype}")
-
-                if etype == "start":
-                    stream_sid = evt["start"]["streamSid"]
-                    # Reset session state for new call
-                    session_state["phone_number"] = None
-                    session_state["order_number"] = None
-                    session_state["phone_confirmed"] = False
-                    session_state["received_sms_sent"] = False
-                    session_state["pending_item"] = None
-                    twilio_to_agent_state = None
-                    agent_to_twilio_state = None
-                    print(f"▶️ Stream started: {stream_sid}")
-
-                elif etype == "media":
-                    ulaw8k = base64.b64decode(evt["media"]["payload"])
-                    lin48k, twilio_to_agent_state = ulaw8k_to_lin16_48k(ulaw8k, twilio_to_agent_state)
-                    if lin48k:
-                        await agent.send(lin48k)
-
-                elif etype == "stop":
-                    print("⏹️ Stream stopped")
-                    await finalize_and_send_sms()
+                try:
+                    await agent.send(lin48k)
+                except Exception:
                     break
 
-                else:
-                    print("[twilio raw]", evt)
+            elif ev == "stop":
+                log.info(f"[{call_sid}][{stream_sid}] Twilio stream stopped")
+                await _finalize_and_hangup(call_sid)  # idempotent
+                break
 
-        except WebSocketDisconnect:
-            print("⚠️ Twilio WebSocketDisconnect")
-            await finalize_and_send_sms()
-        finally:
-            try: await agent.close()
-            except Exception: pass
-            forward_task.cancel()
-            try: await ws.close()
-            except Exception: pass
-            await finalize_and_send_sms()
-            print("🔌 Twilio WebSocket closed")
+            else:
+                pass
+
+    except WebSocketDisconnect:
+        log.info(f"[{call_sid}][{stream_sid}] websocket disconnect")
+    except Exception as e:
+        log.exception(f"[{call_sid}][{stream_sid}] error: {e}")
+    finally:
+        # stop meter cleanly
+        meter_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await meter_task
+
+        # close agent + background reader (graceful: suppress CancelledError)
+        if agent_reader_task:
+            agent_reader_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await agent_reader_task
+        with contextlib.suppress(Exception):
+            if agent:
+                await agent.close()
+
+        # session cleanup + event
+        with contextlib.suppress(Exception):
+            if call_sid and call_sid != "unknown":
+                await publish("orders", {"type": "CallEnded", "call_sid": call_sid})
+                await sessions.remove(call_sid)
+        _HUNG_UP.discard(call_sid)
+        _HANGUP_INFLIGHT.discard(call_sid)
+
+# Back-compat shim
+def register_ws_routes(app):
+    app.include_router(router)

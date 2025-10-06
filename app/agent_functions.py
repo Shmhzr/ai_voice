@@ -1,142 +1,88 @@
-# agent_functions.py
+# app/agent_functions.py
 from typing import Any, Dict, Optional
+import asyncio
+
 from . import business_logic as bl
+from .session import sessions
+from .events import publish  # NEW
 
-# --- Session state for the call ---
-session_state: Dict[str, Any] = {
-    "phone_number": None,
-    "order_number": None,   # set after checkout (but not finalized)
-    "phone_confirmed": False,  # track if phone was explicitly confirmed
-    "received_sms_sent": False,  # track if SMS was already sent
-    # staged-but-not-confirmed drink
-    "pending_item": None,   # {"flavor":..., "toppings":[...], "sweetness":..., "ice":..., "addons":[...]}
-}
+# ---------- Tool implementations (per-call) ----------
+async def _add_to_cart(flavor: str, toppings=None, sweetness: str | None = None,
+                       ice: str | None = None, addons=None, *, call_sid: str | None = None):
+    return await bl.add_to_cart(flavor, toppings, sweetness, ice, addons, call_sid=call_sid)
 
-# ---------- Helpers ----------
-def _coerce_list(x):
-    if x is None:
-        return []
-    if isinstance(x, (list, tuple)):
-        return [i for i in x if i is not None]
-    return [x]
+async def _remove_from_cart(index: int, *, call_sid: str | None = None):
+    return await bl.remove_from_cart(index, call_sid=call_sid)
 
-def _merge_item(base: dict, update: dict) -> dict:
-    out = dict(base or {})
-    for k, v in (update or {}).items():
-        if v is None:
-            continue
-        if k in ("toppings", "addons"):
-            out[k] = _coerce_list(v)
-        else:
-            out[k] = v
-    return out
+async def _modify_cart_item(index: int, flavor: str | None = None, toppings=None,
+                            sweetness: str | None = None, ice: str | None = None, addons=None,
+                            *, call_sid: str | None = None):
+    return await bl.modify_cart_item(index, flavor, toppings, sweetness, ice, addons, call_sid=call_sid)
 
-def _pending_summary(it: Optional[dict]) -> str:
-    if not it:
-        return "no pending item"
-    flavor = it.get("flavor") or "unknown flavor"
-    tops = ", ".join(_coerce_list(it.get("toppings"))) or "no toppings"
-    adds = ", ".join(_coerce_list(it.get("addons"))) or "no add-ons"
-    sweet = it.get("sweetness") or "50%"
-    ice = it.get("ice") or "regular ice"
-    return f"{flavor} | {tops} | {adds} | {sweet}, {ice}"
+async def _set_sweetness_ice(index: int | None = None, sweetness: str | None = None,
+                             ice: str | None = None, *, call_sid: str | None = None):
+    return await bl.set_sweetness_ice(index, sweetness, ice, call_sid=call_sid)
 
-# ---------- Tool wrappers ----------
-def _stage_item(flavor: str, toppings=None, sweetness: str | None = None, ice: str | None = None, addons=None):
-    """Stage a drink (NOT added to cart yet)."""
-    staged = {
-        "flavor": flavor,
-        "toppings": _coerce_list(toppings),
-        "sweetness": sweetness,
-        "ice": ice,
-        "addons": _coerce_list(addons),
-    }
-    session_state["pending_item"] = staged
-    return {"ok": True, "staged": True, "pending_item": staged, "summary": _pending_summary(staged)}
+async def _get_cart(*, call_sid: str | None = None):
+    return await bl.get_cart(call_sid=call_sid)
 
-def _update_pending_item(flavor: str | None = None, toppings=None, sweetness: str | None = None, ice: str | None = None, addons=None):
-    """Modify the staged drink before confirmation."""
-    current = session_state.get("pending_item") or {}
-    patch = {}
-    if flavor is not None: patch["flavor"] = flavor
-    if sweetness is not None: patch["sweetness"] = sweetness
-    if ice is not None: patch["ice"] = ice
-    if toppings is not None: patch["toppings"] = _coerce_list(toppings)
-    if addons is not None: patch["addons"] = _coerce_list(addons)
-    updated = _merge_item(current, patch)
-    session_state["pending_item"] = updated
-    return {"ok": True, "staged": True, "pending_item": updated, "summary": _pending_summary(updated)}
-
-def _clear_pending_item():
-    session_state["pending_item"] = None
-    return {"ok": True, "cleared": True}
-
-def _confirm_pending_to_cart():
-    """Confirm the staged drink -> actually adds to cart via business logic."""
-    staged = session_state.get("pending_item")
-    if not staged or not staged.get("flavor"):
-        return {"ok": False, "error": "No pending drink to confirm."}
-    res = bl.add_to_cart(
-        flavor=staged.get("flavor"),
-        toppings=staged.get("toppings"),
-        sweetness=staged.get("sweetness"),
-        ice=staged.get("ice"),
-        addons=staged.get("addons"),
-    )
+async def _checkout_order(phone: str | None = None, *, call_sid: str | None = None):
+    # Generate order number, but do not finalize.
+    res = await bl.checkout_order(phone, call_sid=call_sid)
     if isinstance(res, dict) and res.get("ok"):
-        session_state["pending_item"] = None
+        s = await sessions.get_or_create(call_sid or "unknown")
+        if res.get("phone"):
+            s.phone = res["phone"]
+            # NOTE: do NOT auto-confirm here; explicit confirmation is required.
+        if res.get("order_number"):
+            s.order_number = res["order_number"]
+            # 🔔 Tell dashboards an order number was assigned (pre-finalize)
+            await publish("orders", {
+                "type": "order_locked",
+                "order_number": s.order_number,
+                "call_sid": call_sid
+            })
     return res
 
-def _wrap_checkout_order(phone: str | None = None):
-    """
-    Auto-commit any staged item, generate order number, but DON'T finalize yet.
-    Order will be finalized on hangup.
-    IMPORTANT: Only generate order number ONCE per call session.
-    """
-    # If order number already exists, don't call checkout again - just return existing
-    if session_state.get("order_number"):
-        return {
-            "ok": True,
-            "order_number": session_state["order_number"],
-            "already_created": True,
-            "message": "Order number already generated for this call"
-        }
-    
-    # Auto-commit any pending item
-    if session_state.get("pending_item"):
-        _ = _confirm_pending_to_cart()
+async def _order_status(phone: str | None = None, order_number: str | None = None,
+                        *, call_sid: str | None = None):
+    return await bl.order_status(phone, order_number, call_sid=call_sid)
 
-    result = bl.checkout_order(phone=phone)
-    
-    if isinstance(result, dict) and result.get("ok"):
-        # Store order number in session but DON'T persist yet
-        if result.get("phone"):
-            session_state["phone_number"] = result["phone"]
-            session_state["phone_confirmed"] = True
-        if result.get("order_number"):
-            session_state["order_number"] = result["order_number"]
-        
-        # NOTE: We do NOT call add_order() or publish() here
-        # That happens on hangup in ws_bridge.py
-    
-    return result
+def _menu_summary():
+    return bl.menu_summary()
 
-def _save_phone_number(phone: str):
-    normalized = bl.normalize_phone(phone)
-    session_state["phone_number"] = normalized
-    session_state["phone_confirmed"] = True
-    return {"ok": True, "phone": normalized}
+def _extract_phone_and_order(text: str):
+    return bl.extract_phone_and_order(text)
 
-def _order_is_placed():
-    """Let the agent know if an order has already been placed in this call session."""
-    placed = bool(session_state.get("order_number"))
-    return {"placed": placed, "order_number": session_state.get("order_number")}
+async def _save_phone_number(phone: str, *, call_sid: str | None = None):
+    from .business_logic import normalize_phone
+    s = await sessions.get_or_create(call_sid or "unknown")
+    p = normalize_phone(phone)
+    s.phone = p
+    s.phone_confirmed = False  # <-- minimal change: do NOT auto-confirm
+    return {"ok": bool(p), "phone": p}
 
-def _get_cart():
-    """Return current cart contents for the agent to read back."""
-    return bl.get_cart()
+# NEW: explicit confirmation tool (minimal addition)
+async def _confirm_phone_number(confirmed: bool, *, call_sid: str | None = None):
+    s = await sessions.get_or_create(call_sid or "unknown")
+    s.phone_confirmed = bool(confirmed) and bool(s.phone)
+    return {"ok": s.phone_confirmed, "phone": s.phone}
 
-# ---------- Tool definitions ----------
+# Back-compat no-ops for staged flow (so the prompt doesn’t break)
+async def _confirm_pending_to_cart(*, call_sid: str | None = None):
+    # Our add_to_cart writes directly. Nothing to confirm.
+    return {"ok": True, "staged": False}
+
+async def _clear_pending_item(*, call_sid: str | None = None):
+    # No staged item; just a no-op.
+    return {"ok": True, "cleared": True}
+
+async def _order_is_placed(*, call_sid: str | None = None):
+    s = await sessions.get_or_create(call_sid or "unknown")
+    placed = bool(s.order_number)
+    return {"placed": placed, "order_number": s.order_number}
+
+# ---------- Tool definitions (Deepgram Agent expects this schema) ----------
 FUNCTION_DEFS: list[Dict[str, Any]] = [
     {
         "name": "menu_summary",
@@ -144,14 +90,14 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
 
-    # Staging flow (no cart writes until confirmed)
+    # Cart ops
     {
         "name": "add_to_cart",
-        "description": "Stage a drink spec (flavor/toppings/addons). Does NOT add to cart until confirmed.",
+        "description": "Add a drink to the cart (standard size).",
         "parameters": {
             "type": "object",
             "properties": {
-                "flavor": {"type": "string", "description": "taro milk tea | black milk tea"},
+                "flavor": {"type": "string"},
                 "toppings": {"type": "array", "items": {"type": "string"}},
                 "sweetness": {"type": "string", "description": "0% | 25% | 50% | 75% | 100%"},
                 "ice": {"type": "string", "description": "no ice | less ice | regular ice | extra ice"},
@@ -160,45 +106,6 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
             "required": ["flavor"],
         },
     },
-    {
-        "name": "update_pending_item",
-        "description": "Modify the staged (pending) drink before confirmation.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "flavor": {"type": "string"},
-                "toppings": {"type": "array", "items": {"type": "string"}},
-                "sweetness": {"type": "string"},
-                "ice": {"type": "string"},
-                "addons": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "confirm_pending_to_cart",
-        "description": "Confirm the staged drink and actually add it to the cart.",
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "clear_pending_item",
-        "description": "Discard the staged drink (if caller cancels or restarts).",
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-    {
-        "name": "get_cart",
-        "description": "Get current cart contents to read back to customer.",
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-
-    # Call/session helpers
-    {
-        "name": "order_is_placed",
-        "description": "Return whether an order has already been placed in this call session.",
-        "parameters": {"type": "object", "properties": {}, "required": []},
-    },
-
-    # Cart modification
     {
         "name": "remove_from_cart",
         "description": "Remove a drink by index (0-based).",
@@ -238,8 +145,22 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
         },
     },
     {
+        "name": "get_cart",
+        "description": "Get current cart contents to read back to customer.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+
+    # Session helpers (compat)
+    {
+        "name": "order_is_placed",
+        "description": "Return whether an order number has been generated in this call session.",
+        "parameters": {"type": "object", "properties": {}, "required": []},
+    },
+
+    # Checkout / status
+    {
         "name": "checkout_order",
-        "description": "Generate order number but don't finalize yet. Order is finalized on hangup. If a drink is staged, it will be added first. Can only be called ONCE per call - subsequent calls return existing order number.",
+        "description": "Generate order number but don't finalize yet. Can be called once per order flow.",
         "parameters": {
             "type": "object",
             "properties": {"phone": {"type": "string"}},
@@ -264,39 +185,46 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
             "required": ["text"],
         },
     },
+
+    # Phone capture + confirmation (NEW)
     {
         "name": "save_phone_number",
-        "description": "Save the customer's phone number for pickup.",
+        "description": "Save the customer's phone number for pickup (not confirmed).",
         "parameters": {
             "type": "object",
             "properties": {"phone": {"type": "string"}},
             "required": ["phone"],
         },
     },
+    {
+        "name": "confirm_phone_number",
+        "description": "Confirm (true) or reject (false) the previously provided phone number.",
+        "parameters": {
+            "type": "object",
+            "properties": {"confirmed": {"type": "boolean"}},
+            "required": ["confirmed"],
+        },
+    },
+
+    # Back-compat stubs (no staging in this build)
+    {"name": "confirm_pending_to_cart", "description": "No-op in this build.", "parameters": {"type": "object", "properties": {}, "required": []}},
+    {"name": "clear_pending_item", "description": "No-op in this build.", "parameters": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # --- Map tool names to functions ---
 FUNCTION_MAP: dict[str, Any] = {
-    "menu_summary": bl.menu_summary,
-
-    # Staging flow
-    "add_to_cart": _stage_item,
-    "update_pending_item": _update_pending_item,
+    "menu_summary": _menu_summary,
+    "add_to_cart": _add_to_cart,
+    "remove_from_cart": _remove_from_cart,
+    "modify_cart_item": _modify_cart_item,
+    "set_sweetness_ice": _set_sweetness_ice,
+    "get_cart": _get_cart,
+    "order_is_placed": _order_is_placed,
+    "checkout_order": _checkout_order,
+    "order_status": _order_status,
+    "extract_phone_and_order": _extract_phone_and_order,
+    "save_phone_number": _save_phone_number,
+    "confirm_phone_number": _confirm_phone_number,  # NEW
     "confirm_pending_to_cart": _confirm_pending_to_cart,
     "clear_pending_item": _clear_pending_item,
-    "get_cart": _get_cart,
-
-    # Session
-    "order_is_placed": _order_is_placed,
-
-    # Cart modification
-    "remove_from_cart": bl.remove_from_cart,
-    "modify_cart_item": bl.modify_cart_item,
-    "set_sweetness_ice": bl.set_sweetness_ice,
-    
-    # Checkout
-    "checkout_order": _wrap_checkout_order,
-    "order_status": bl.order_status,
-    "extract_phone_and_order": bl.extract_phone_and_order,
-    "save_phone_number": _save_phone_number,
 }
