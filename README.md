@@ -2,7 +2,7 @@
 
 A production-ready voice ordering system for boba shops built with **FastAPI**, **Twilio**, and **Deepgram Agent API**. Features real-time voice conversations, SMS notifications, and live order dashboards.
 
-## 🎯 What is Deepgram BobaRista?
+## What is Deepgram BobaRista?
 
 Deepgram BobaRista is an AI-powered voice ordering system that allows customers to call a phone number and place boba tea orders through natural conversation. The system uses advanced speech recognition, natural language processing, and text-to-speech to create a seamless ordering experience.
 
@@ -15,7 +15,7 @@ Deepgram BobaRista is an AI-powered voice ordering system that allows customers 
 - 🏪 **Production Ready**: Containerized, scalable, and secure
 - 🔧 **Easy Setup**: Complete documentation and deployment guides
 
-## 🎬 Demo
+## Demo
 
 ### How It Works
 
@@ -40,7 +40,7 @@ Customer: "555-123-4567"
 AI: "Thank you! Your order number is 4782. We'll text you when it's ready for pickup!"
 ```
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
@@ -69,7 +69,7 @@ AI: "Thank you! Your order number is 4782. We'll text you when it's ready for pi
 - **Real-time Dashboard**: Server-Sent Events for live order updates
 - **Containerized**: Podman/Docker with production-ready configuration
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -111,10 +111,10 @@ ngrok http 8000
 
 For production deployment, see our comprehensive guides:
 
-- 🚀 **[Deployment Guide](documentations/doc-04-deployment.md)** - Complete production setup
-- ☁️ **[AWS EC2 Setup](documentations/doc-02-ec2-setup.md)** - Server configuration
-- 📱 **[Twilio Setup](documentations/doc-03-twilio-setup.md)** - Phone number configuration
-- 🏗️ **[Architecture Guide](documentations/doc-05-architecture.md)** - System design details
+- **[Deployment Guide](documentations/doc-04-deployment.md)** - Complete production setup
+- **[AWS EC2 Setup](documentations/doc-02-ec2-setup.md)** - Server configuration
+- **[Twilio Setup](documentations/doc-03-twilio-setup.md)** - Phone number configuration
+- **[Architecture Guide](documentations/doc-05-architecture.md)** - System design details
 
 **Quick Production Commands:**
 ```bash
@@ -129,7 +129,7 @@ sudo systemctl enable bobarista
 sudo systemctl start bobarista
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 DG-Boba-Assitant/
@@ -174,7 +174,7 @@ DG-Boba-Assitant/
 - **`Containerfile`** - Container configuration for easy deployment
 - **`sample.env.txt`** - Template for environment configuration
 
-## 🔧 Technical Details
+## Technical Details
 
 ### Audio Processing Pipeline
 
@@ -208,7 +208,7 @@ DG-Boba-Assitant/
 | `/barista` | GET | Staff console interface |
 | `/orders.json` | GET | Orders data (JSON API) |
 
-## 🛠️ Development Workflow
+## Development Workflow
 
 ### Code Organization
 
@@ -234,7 +234,7 @@ pytest tests/test_agent_functions.py
 - **Linting**: Configure with your preferred linter (flake8, black, etc.)
 - **Formatting**: Consistent code formatting
 
-## 🔐 Environment Configuration
+## Environment Configuration
 
 Create `.env` file with required variables:
 
@@ -263,7 +263,7 @@ AGENT_TTS_MODEL=aura-2-odysseus-en
 AGENT_STT_MODEL=nova-3
 ```
 
-## 📊 Monitoring & Debugging
+## Monitoring & Debugging
 
 ### Logs
 
@@ -282,7 +282,7 @@ podman logs boba-voice | grep ERROR
 - **WebSocket Monitoring**: Real-time connection status
 - **Error Reporting**: Detailed error messages with stack traces
 
-## 🚀 Production Considerations
+## Production Considerations
 
 ### Performance
 
@@ -303,7 +303,7 @@ podman logs boba-voice | grep ERROR
 - **Load Balancing**: Compatible with standard load balancers
 - **Database**: Easy migration to persistent database (PostgreSQL, etc.)
 
-## 📚 Documentation
+## Documentation
 
 Comprehensive documentation available in the `documentations/` directory:
 
@@ -313,7 +313,7 @@ Comprehensive documentation available in the `documentations/` directory:
 - **[Deployment](documentations/doc-04-deployment.md)**: Production deployment guide
 - **[Troubleshooting](documentations/doc-07-troubleshooting.md)**: Common issues and solutions
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -323,11 +323,11 @@ Comprehensive documentation available in the `documentations/` directory:
 
 See [Development Guide](documentations/doc-08-development.md) for detailed contribution guidelines.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
