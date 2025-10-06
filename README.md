@@ -360,9 +360,3 @@ curl http://localhost:8000/orders.json
 ```
 
 For detailed troubleshooting, check the application logs and verify your configuration.
-
-## 🆘 Support
-
-- **🐛 Issues**: Report bugs and request features via [GitHub Issues](https://github.com/your-username/DG-Boba-Assitant/issues)
-- **📚 Documentation**: Check the `documentations/` directory for detailed guides
-- **💬 Community**: Join our discussions for help and feature requests
