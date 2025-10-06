@@ -174,7 +174,7 @@ sudo apt upgrade -y
 ### 7.1 Install Python 3.11
 
 # Add Python PPA
-sudo apt install -y xxx
+sudo apt install -y software-properties-common
 sudo add-apt-repository -y ppa:deadsnakes/ppa
 
 # Install Python 3.11 and dev tools
@@ -191,7 +191,7 @@ sudo apt install -y \
   git \
   nginx \
   certbot \
-  xxx \
+  python3-certbot-nginx \
   build-essential \
   curl \
   htop

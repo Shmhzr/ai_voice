@@ -99,10 +99,22 @@ curl https://voice.boba-demo.deepgram.com/orders/in_progress.json
 **Response:** `text/event-stream`
 
 **order_created:**
+```json
+{
   "type": "order_created",
+  "order_number": "4782",
+  "status": "received"
+}
+```
 
-**xxx:**
+**order_ready:**
+```json
+{
+  "type": "order_ready",
+  "order_number": "4782",
   "status": "ready"
+}
+```
 
 **Example (JavaScript):**
 const eventSource = new EventSource('/orders/events');
@@ -155,7 +167,7 @@ curl https://voice.boba-demo.deepgram.com/api/orders/phone/4782
 
 **Side Effects:**
 1. Sets order status to "ready"
-2. Publishes "xxx" event
+2. Publishes "order_ready" event
 3. Sends SMS to customer: "Your order #4782 is ready!"
 
 curl -X POST https://voice.boba-demo.deepgram.com/api/orders/4782/done
@@ -262,7 +274,7 @@ Functions available to the Deepgram Agent during conversation.
     "ice": "less ice",
   "summary": "black milk tea | egg pudding | no add-ons | 75%, less ice"
 
-### xxx
+### confirm_pending_item
 
 **Description:** Confirm staged drink and add to cart
 
@@ -402,6 +414,4 @@ Functions available to the Deepgram Agent during conversation.
 
 # Connect
 
-- 🔧 [Troubleshooting Guide](07-troubleshooting.md)
-- 🛠️ [Development Guide](08-development.md)
-- 🏗️ [Architecture Overview](05-architecture.md)
+- 🏗️ [Architecture Guide](doc-05-architecture.md)

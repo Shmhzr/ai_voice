@@ -9,15 +9,17 @@ Complete guide for configuring Twilio phone numbers, webhooks, and SMS for Deepg
 2. You'll see the dashboard with:
 
 Account Info
-├── Account SID: xxx
+├── Account SID: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 └── Auth Token: ********************************
 
 3. **Click the eye icon** to reveal Auth Token
 4. **Copy both values** - you'll need them for `.env` file
 
 **Save these securely:**
-TWILIO_ACCOUNT_SID=xxx
-TWILIO_AUTH_TOKEN=xxx
+```bash
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_AUTH_TOKEN=your_auth_token_here
+```
 
 ## Step 2: Upgrade Account
 

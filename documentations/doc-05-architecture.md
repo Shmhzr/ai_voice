@@ -142,11 +142,11 @@ async def twilio_agent(ws: WebSocket):
     await send_agent_settings(agent)
 
     # Audio resampling states
-    xxx = None
+    resample_state = None
 
     # Bidirectional streaming
-    # 1. xxx() - forwards Deepgram → Twilio
-    # 2. Main loop - forwards Twilio → Deepgram
+# 1. forward_agent_to_twilio() - forwards Deepgram → Twilio
+# 2. Main loop - forwards Twilio → Deepgram
 
     # Handle events: start, media, stop
     # Execute function calls
@@ -175,7 +175,7 @@ Deepgram Output (Linear16 24kHz):
 **A. Staging Flow** (prevents accidental cart adds)
 add_to_cart()             # Stage a drink (not in cart yet)
 update_pending_item()     # Modify staged drink
-xxx() # Actually add to cart
+confirm_pending_item()    # Actually add to cart
 clear_pending_item()      # Discard staged drink
 
 **B. Order Management**
@@ -277,10 +277,10 @@ def add_order(order: dict):
 - `clear_store()` - Wipe orders on shutdown
 - `add_order()` - Append new order
 - `list_recent_orders()` - Get recent orders (newest first)
-- `xxx()` - Get active orders only
+- `list_active_orders()` - Get active orders only
 - `get_order()` - Get full order by order number
 - `set_order_status()` - Update order status
-- `xxx()` - Get customer's latest order
+- `get_customer_orders()` - Get customer's latest order
 
 **Order Structure:**
 ```json
@@ -313,7 +313,7 @@ async def subscribe() -> asyncio.Queue:
 
 **Event Types:**
 {"type": "order_created", "order_number": "4782", "status": "received"}
-{"type": "xxx", "order_number": "4782", "status": "ready"}
+{"type": "order_ready", "order_number": "4782", "status": "ready"}
 
 **Usage in HTTP Routes:**
 
@@ -435,7 +435,7 @@ def send_ready_sms(order_no: str, to_phone_no: str):
 11. READY NOTIFICATION
     Barista → Clicks "Done" button
     Server → set_order_status("4782", "ready")
-           → Publishes "xxx" event
+           → Publishes "order_ready" event
            → Sends SMS: "Your order #4782 is ready!"
 
 12. PICKUP
@@ -462,7 +462,7 @@ pending_item = {"flavor": "taro milk tea", ...}
 
 Agent: "One taro milk tea. Is that correct?"
 Customer: "Yes"
-Agent: xxx()  ← NOW added to cart
+Agent: confirm_pending_item()  ← NOW added to cart
 
 # OR if customer changes mind:
 Customer: "Actually, make it black milk tea"
@@ -479,14 +479,14 @@ def _stage_item(flavor, toppings, ...):
     return {"ok": True, "staged": True}
 
 # Modify staged drink
-def xxx(flavor=None, toppings=None, ...):
+def update_pending_item(flavor=None, toppings=None, ...):
     current = session_state.get("pending_item") or {}
     # Merge changes
     updated = {**current, "flavor": flavor or current.get("flavor"), ...}
     session_state["pending_item"] = updated
 
 # Confirm and add to cart
-def xxx():
+def confirm_pending_item():
     staged = session_state.get("pending_item")
     if not staged:
         return {"ok": False, "error": "No pending drink"}
@@ -515,7 +515,7 @@ def xxx():
 const es = new EventSource('/orders/events');
 es.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
-    if (msg.type === 'order_created' || msg.type === 'xxx') {
+    if (msg.type === 'order_created' || msg.type === 'order_ready') {
         loadOrders();
 };
 

@@ -56,8 +56,7 @@ You can use the Elastic IP directly, but this has limitations:
 ssh -i your-key.pem ubuntu@your-elastic-ip
 
 # Clone repository
-
-git clone https://github.com/your-repo/bobarista.git .
+git clone https://github.com/your-username/DG-Boba-Assitant.git .
 
 **Option B: Using SCP**
 
@@ -104,7 +103,9 @@ nano .env
 # Deepgram Configuration
 
 # Twilio Messaging (for SMS)
-xxx=+xxxxxxxxx
+MSG_TWILIO_ACCOUNT_SID=your_msg_twilio_account_sid_here
+MSG_TWILIO_AUTH_TOKEN=your_msg_twilio_auth_token_here
+MSG_TWILIO_FROM_E164=+1234567890
 
 **Save:** Ctrl+O, Enter, Ctrl+X
 
