@@ -51,7 +51,7 @@ AI: "Thank you! Your order number is 4782. We'll text you when it's ready for pi
                                                          ▼
                                                ┌─────────────────┐
                                                │  Deepgram Agent │
-                                               │  (STT + LLM + TTS)│
+                                               │(STT + LLM + TTS)│
                                                └─────────────────┘
                                                          │
                                                          ▼
