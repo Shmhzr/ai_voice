@@ -23,7 +23,7 @@ TWILIO_AUTH_TOKEN=your_auth_token_here
 
 ## Step 2: Upgrade Account
 
-⚠️ **Important**: Trial accounts have limitations. For production use, you must upgrade.
+**Important**: Trial accounts have limitations. For production use, you must upgrade.
 
 ### 2.1 Add Billing Information
 
@@ -229,7 +229,7 @@ xxx=xxx-xxx-xxxx
 
 Now that Twilio is configured:
 
-- 🚀 [Deploy Application](04-deployment.md)
-- 🏗️ [Understand Architecture](05-architecture.md)
-- 🧪 [Test Your System](../README.md#quick-test)
+- [Deploy Application](04-deployment.md)
+- [Understand Architecture](05-architecture.md)
+- [Test Your System](../README.md#quick-test)
 

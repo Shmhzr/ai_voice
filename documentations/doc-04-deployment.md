@@ -52,11 +52,36 @@ You can use the Elastic IP directly, but this has limitations:
 
 **Option A: Using Git (Recommended)**
 
+```bash
 # SSH into your server
 ssh -i your-key.pem ubuntu@your-elastic-ip
 
 # Clone repository
 git clone https://github.com/your-username/DG-Boba-Assitant.git .
+```
+
+**Option A1: Using Pre-built Container Image (Faster)**
+
+```bash
+# SSH into your server
+ssh -i your-key.pem ubuntu@your-elastic-ip
+
+# Create app directory
+sudo mkdir -p /opt/bobarista
+cd /opt/bobarista
+
+# Pull and run the pre-built image
+podman run -d --name boba-voice \
+  -p 8000:8000 \
+  --env-file .env \
+  quay.io/jeniya26/deepgram_bobarista:amd64
+
+# Or for development version
+podman run -d --name boba-voice \
+  -p 8000:8000 \
+  --env-file .env \
+  quay.io/jeniya26/deepgram_bobarista:dev
+```
 
 **Option B: Using SCP**
 

@@ -42,7 +42,7 @@ Specs:
   t2.small:  1 vCPU,  2 GB RAM
   t2.medium: 2 vCPUs, 4 GB RAM
 
-⚠️ **Note**: t2.micro (1GB RAM) may run out of memory.
+**Note**: t2.micro (1GB RAM) may run out of memory.
 
 **Key Pair (Login):**
 Option 1: Create new key pair
@@ -292,7 +292,7 @@ free -h
 2. Click "Instance state" dropdown
 3. Choose "Stop" or "Start"
 
-⚠️ **Warning**: If you stop the instance, you may need to reassociate the Elastic IP.
+**Warning**: If you stop the instance, you may need to reassociate the Elastic IP.
 
 ### Reboot Instance
 
@@ -392,8 +392,8 @@ Consider setting up:
 
 Now that your EC2 instance is configured, proceed to:
 
-- 📱 [Twilio Setup Guide](03-twilio-setup.md) - Configure phone numbers
-- 🚀 [Deployment Guide](04-deployment.md) - Deploy the application
+- [Twilio Setup Guide](03-twilio-setup.md) - Configure phone numbers
+- [Deployment Guide](04-deployment.md) - Deploy the application
 
 **SSH Connection:**
 ssh -i ~/path/to/key.pem ubuntu@xx.xxx.xx.xx

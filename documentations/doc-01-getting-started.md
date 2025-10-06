@@ -43,7 +43,7 @@ DEEPGRAM_API_KEY=your_deepgram_api_key_here
 # Agent Configuration
 AGENT_LANGUAGE=en
 AGENT_TTS_MODEL=aura-2-odysseus-en
-AGENT_STT_MODEL=nova-3
+AGENT_STT_MODEL=flux-general-en
 
 # Twilio Voice (for calls)
 TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
@@ -85,6 +85,34 @@ docker run -d --name boba-voice \
   --env-file .env \
   boba-voice:local
 ```
+
+### Using Pre-built Container Image
+
+Alternatively, you can use the pre-built container image from Quay.io:
+
+```bash
+# Pull and run the pre-built image (stable version)
+podman run -d --name boba-voice \
+  -p 8000:8000 \
+  --env-file .env \
+  quay.io/jeniya26/deepgram_bobarista:amd64
+
+# Or for development version
+podman run -d --name boba-voice \
+  -p 8000:8000 \
+  --env-file .env \
+  quay.io/jeniya26/deepgram_bobarista:dev
+
+# Using Docker instead of Podman
+docker run -d --name boba-voice \
+  -p 8000:8000 \
+  --env-file .env \
+  quay.io/jeniya26/deepgram_bobarista:amd64
+```
+
+**Available Image Tags:**
+- `quay.io/jeniya26/deepgram_bobarista:amd64` - Stable production build
+- `quay.io/jeniya26/deepgram_bobarista:dev` - Development build with latest changes
 
 ### Verify It's Running
 

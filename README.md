@@ -8,12 +8,12 @@ Deepgram BobaRista is an AI-powered voice ordering system that allows customers 
 
 ### Key Features
 
-- 🎤 **Natural Voice Ordering**: Customers call and speak naturally to place orders
-- 🤖 **AI-Powered Assistant**: Uses Deepgram's Agent API for intelligent conversation
-- 📱 **SMS Notifications**: Automatic order confirmations and ready notifications
-- 📊 **Real-time Dashboards**: Live order tracking for staff and customers
-- 🏪 **Production Ready**: Containerized, scalable, and secure
-- 🔧 **Easy Setup**: Complete documentation and deployment guides
+-  **Natural Voice Ordering**: Customers call and speak naturally to place orders
+-  **AI-Powered Assistant**: Uses Deepgram's Agent API for intelligent conversation
+-  **SMS Notifications**: Automatic order confirmations and ready notifications
+-  **Real-time Dashboards**: Live order tracking for staff and customers
+-  **Production Ready**: Containerized, scalable, and secure
+
 
 ## Demo
 
@@ -101,6 +101,24 @@ ngrok http 8000
 # Use ngrok URL: https://your-ngrok-url.ngrok-free.app/voice
 ```
 
+### Using Pre-built Container Image
+
+Alternatively, you can use the pre-built container image from Quay.io:
+
+```bash
+# Pull and run the pre-built image
+podman run -d --name boba-voice \
+  -p 8000:8000 \
+  --env-file .env \
+  quay.io/jeniya26/deepgram_bobarista:amd64
+
+# Or for development version
+podman run -d --name boba-voice \
+  -p 8000:8000 \
+  --env-file .env \
+  quay.io/jeniya26/deepgram_bobarista:dev
+```
+
 ### Test Your Setup
 
 1. **Call your Twilio number** - You should hear the AI greeting
@@ -174,6 +192,15 @@ DG-Boba-Assitant/
 - **`Containerfile`** - Container configuration for easy deployment
 - **`sample.env.txt`** - Template for environment configuration
 
+### Container Images
+
+Pre-built container images are available on Quay.io:
+
+- **Stable**: `quay.io/jeniya26/deepgram_bobarista:amd64`
+- **Development**: `quay.io/jeniya26/deepgram_bobarista:dev`
+
+Use these images for faster deployment without building from source.
+
 ## Technical Details
 
 ### Audio Processing Pipeline
@@ -185,7 +212,7 @@ DG-Boba-Assitant/
 
 ### AI Agent Configuration
 
-- **STT Model**: `nova-3` (real-time speech recognition)
+- **STT Model**: `flux-general-en` (real-time speech recognition)
 - **LLM Model**: `gemini-2.5-flash` (reasoning and responses)
 - **TTS Model**: `aura-2-odysseus-en` (natural voice synthesis)
 - **Language**: English (`en`)
@@ -260,7 +287,7 @@ MSG_TWILIO_FROM_E164=+1234567890
 # Agent Configuration
 AGENT_LANGUAGE=en
 AGENT_TTS_MODEL=aura-2-odysseus-en
-AGENT_STT_MODEL=nova-3
+AGENT_STT_MODEL=flux-general-en
 ```
 
 ## Monitoring & Debugging

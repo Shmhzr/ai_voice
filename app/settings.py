@@ -9,7 +9,6 @@ DG_API_KEY = os.environ["DEEPGRAM_API_KEY"]
 
 AGENT_LANGUAGE = os.getenv("AGENT_LANGUAGE", "en")
 SPEAK_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_TTS_MODEL", "aura-2-odysseus-en")}
-# LISTEN_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_STT_MODEL", "nova-3")}
 LISTEN_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_STT_MODEL", "flux-general-en")}
 THINK_PROVIDER  = {"type": "google",   "model": os.getenv("AGENT_THINK_MODEL", "gemini-2.5-flash")}
 

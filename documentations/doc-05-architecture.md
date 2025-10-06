@@ -1,6 +1,6 @@
 # System Architecture
 
-Deep dive into how Deepgram BobaRista works under the hood.
+Deep dive into how Deepgram BobaRista works under the hood, powered by Flux for advanced AI reasoning and conversation management.
 
 ## High-Level Overview
 
@@ -40,7 +40,7 @@ Deep dive into how Deepgram BobaRista works under the hood.
                          │ WebSocket: wss://agent.deepgram.com
 │                    Deepgram Agent API                            │
 │  │ Listen (STT)    │ Think (LLM)     │ Speak (TTS)            │ │
-│  │ nova-3          │ gemini-2.5-flash│ aura-2-odysseus-en     │ │
+│  │ flux-general-en │ gemini-2.5-flash│ aura-2-odysseus-en     │ │
 └──────────────────────────────────────────────────────────────────┘
 
 ## Call Flow Sequence
@@ -71,7 +71,7 @@ Deepgram → Sends greeting: "Hey! I am your Deepgram BobaRista..."
 Customer speaks
 Twilio → Sends audio (µ-law 8kHz, base64-encoded)
 Server → Decodes + Resamples to Linear16 48kHz
-Deepgram → STT (nova-3) → Text
+Deepgram → STT (flux-general-en) → Text
          → LLM (gemini-2.5-flash) → Response
          → TTS (aura-2-odysseus-en) → Audio (Linear16 24kHz)
 Server → Resamples to µ-law 8kHz

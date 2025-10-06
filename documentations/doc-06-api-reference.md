@@ -183,7 +183,7 @@ curl -X POST https://voice.boba-demo.deepgram.com/api/orders/4782/done
 # Create 3 test orders
 curl -X POST "https://voice.boba-demo.deepgram.com/api/seed?n=3"
 
-⚠️ **Note:** This endpoint should be disabled or protected in production.
+**Note:** This endpoint should be disabled or protected in production.
 
 ## WebSocket Protocol
 
@@ -414,4 +414,4 @@ Functions available to the Deepgram Agent during conversation.
 
 # Connect
 
-- 🏗️ [Architecture Guide](doc-05-architecture.md)
+- [Architecture Guide](doc-05-architecture.md)
