@@ -26,7 +26,7 @@ def send_received_sms(order_no: str, to_phone_no: str):
     return _client.messages.create(
         from_=FROM, to=to_phone_no,
         body=(
-            f"Thanks for your order with Deepgram BobaRista! 🍹 "
+            f"Thanks for your order with Deepgram AiPizza! 🍹 "
             f"Your order number is {order_no}. "
             "We’ll text you again when it’s ready for pickup.\n"
             "Reply STOP to opt out."
@@ -43,7 +43,7 @@ def send_ready_sms(order_no: str, to_phone_no: str):
     return _client.messages.create(
         from_=FROM, to=to_phone_no,
         body=(
-            f"Hi! Your boba order #{order_no} is now ready for pickup at Deepgram BobaRista. 🧋 "
+            f"Hi! Your boba order #{order_no} is now ready for pickup at Deepgram AiPizza. 🧋 "
             "See you soon!\n"
             "Reply STOP to opt out."
         )

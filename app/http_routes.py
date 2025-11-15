@@ -50,7 +50,7 @@ INDEX_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>🧋 Deepgram BobaRista - Voice Ordering System</title>
+  <title>🧋 AiPIZZA - AI Voice Ordering</title>
   <style>
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
@@ -71,27 +71,27 @@ INDEX_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <div class="card">
-    <h1>🧋 Deepgram BobaRista</h1>
-    <p>Voice Ordering System</p>
+    <h1>🧋 AiPizza</h1>
+    <p>AI Voice Ordering System</p>
     <div class="grid">
       <a class="tile" href="/orders">
         <div class="t1">📺 Orders TV</div>
-        <div class="t2">Big-screen display (auto-updates)</div>
+        <div class="t2">Live order feed</div>
         <code>/orders</code>
       </a>
       <a class="tile" href="/barista">
-        <div class="t1">👨‍🍳 Barista Console</div>
-        <div class="t2">Mark orders ready (sends SMS)</div>
+        <div class="t1">☕ Barista Console</div>
+        <div class="t2">Manage orders</div>
         <code>/barista</code>
       </a>
       <a class="tile" href="/orders.json">
         <div class="t1">📋 Orders JSON</div>
-        <div class="t2">Recent orders feed</div>
+        <div class="t2">Orders data feed</div>
         <code>/orders.json</code>
       </a>
       <div class="tile">
         <div class="t1">☎️ Twilio Voice Webhook</div>
-        <div class="t2">TwiML endpoint (Twilio calls this)</div>
+        <div class="t2">Booking endpoint (Twilio calls this)</div>
         <code>/voice</code>
       </div>
     </div>
@@ -265,7 +265,7 @@ def _orders_tv_html(refresh: int) -> str:
 </head>
 <body>
   <header>
-    <h1>🧋 Now Preparing</h1>
+    <h1>💈 Appointments - Booking Schedule</h1>
     <div class="muted">Auto refresh: {refresh or 15}s • Live via SSE</div>
   </header>
   <main>
@@ -351,13 +351,13 @@ def _barista_html(refresh: int) -> str:
   </style>
 </head>
 <body>
-  <h1>🧋 Barista Console</h1>
-  <p class="muted">Mark orders as done to text the customer that it's ready for pickup. Auto refresh: {refresh or 15}s • Live via SSE</p>
+  <h1>💈 Reception Desk</h1>
+  <p class="muted">Confirm appointments and send customer notifications. Auto refresh: {refresh or 15}s • Live via SSE</p>
 
   <table id="tbl">
     <thead>
       <tr>
-        <th class="nowrap">Order #</th>
+        <th class="nowrap">Appointment #</th>
         <th>Phone</th>
         <th>Details</th>
         <th>Status</th>
@@ -392,7 +392,7 @@ def _barista_html(refresh: int) -> str:
           <td data-phone>—</td>
           <td data-details style="color:#777;">Loading…</td>
           <td>${{o.status || ''}}</td>
-          <td><button data-done="${{o.order_number}}">Done</button></td>
+          <td data-done="${{o.order_number}}">Confirmed</td>
         `;
         tbody.appendChild(tr);
 
