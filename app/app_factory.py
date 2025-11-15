@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         print("🔌 Server shutting down...")
-        clear_store()
+        # clear_store()
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Twilio ⇄ Deepgram Voice Agent", lifespan=lifespan)

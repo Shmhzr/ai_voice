@@ -4,9 +4,9 @@ from typing import Dict, List, Any, Optional, Tuple
 
 # --- Menu (no pricing, no sizes - one standard size only) ---
 MENU = {
-    "flavors": ["taro milk tea", "black milk tea"],
-    "toppings": ["boba", "egg pudding", "crystal agar boba", "vanilla cream"],
-    "addons": ["matcha stencil on top"],
+    "flavors": ["Cheezy-7","Las Vegas Treat", "Country Side", "La Pinoz Chicken Pizza."],
+    "toppings": ["Paneer", "onion", "capsicum", "mushrooms", "sweet corn"],
+    "addons": ["coke"],
 }
 MAX_DRINKS = 5
 MAX_ORDERS_PER_PHONE = 5  # Maximum active drinks total per phone number
