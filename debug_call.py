@@ -51,7 +51,7 @@ print()
 time.sleep(2)
 
 # Import and run the call
-from call import *
+from app.call import *
 
 print("📞 Call initiated!")
 print()

@@ -99,7 +99,7 @@ def build_deepgram_settings() -> dict:
             "prompt": PROMPT,
             "functions": [
                 {
-                    "name": "add_to_cart",
+                    "name": "_add_to_cart",
                     "description": "Add a menu item to the cart (standard size).",
                     "parameters": {
                         "type": "object",
@@ -122,6 +122,10 @@ def build_deepgram_settings() -> dict:
                             "address": {
                                 "type": "string",
                                 "description": "Delivery address for the order (if applicable)."
+                            },
+                            "call_sid": {
+                            "type": "string",
+                            "description": "Optional Twilio call SID to bind this function call to a specific phone call/session."
                             }
                         }
                     }

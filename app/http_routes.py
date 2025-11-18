@@ -1,4 +1,6 @@
 # app/http_routes.py
+from fastapi.concurrency import run_in_threadpool
+
 import os
 import json as _json
 import asyncio
@@ -6,7 +8,10 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response, JSONResponse, HTMLResponse, StreamingResponse
-
+from twilio.rest import Client
+from app import call
+import dotenv
+dotenv.load_dotenv()
 from .orders_store import (
     list_recent_orders,
     list_in_progress_orders,
@@ -42,6 +47,32 @@ def _autorefresh_meta(refresh_seconds: Optional[int]) -> str:
     if not refresh_seconds or refresh_seconds <= 0:
         return ""
     return f'<meta http-equiv="refresh" content="{int(refresh_seconds)}" />'
+
+# Blocking Twilio call wrapper (used by async endpoint via run_in_threadpool)
+def _make_twilio_call() -> str:
+    """
+    Blocking call that creates a Twilio voice call using env vars:
+      TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_E164, VOICE_HOST, TWILIO_TO_E164
+    Returns the Twilio call SID string.
+    Raises RuntimeError if env vars missing or Twilio call fails.
+    """
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_number = os.getenv("TWILIO_FROM_E164")
+    voice_host = os.getenv("VOICE_HOST")
+    to_number = os.getenv("TWILIO_TO_E164")  # destination E.164
+
+    missing = [k for k in ("TWILIO_ACCOUNT_SID","TWILIO_AUTH_TOKEN","TWILIO_FROM_E164","VOICE_HOST","TWILIO_TO_E164") if not os.getenv(k)]
+    if missing:
+        raise RuntimeError("Missing env variables: " + ", ".join(missing))
+
+    client = Client(account_sid, auth_token)
+    call = client.calls.create(
+        to=to_number,
+        from_=twilio_number,
+        url=f"https://{voice_host}/voice",
+    )
+    return call.sid
 
 # -------------------- Landing page --------------------
 
@@ -422,7 +453,7 @@ def _barista_html(refresh: int) -> str:
         if (!res.ok) throw new Error('Failed');
         btn.textContent = 'Sent ✅';
         setTimeout(load, 600);
-      }} catch (e) {{
+        catch (e) {{
         btn.textContent = 'Error';
       }}
     }});
@@ -466,3 +497,13 @@ def orders_tv(refresh: Optional[int] = Query(default=15, ge=0, le=120)):
 def barista(refresh: Optional[int] = Query(default=15, ge=0, le=120)):
     # Default to 15s meta+JS refresh; SSE instantly pushes on events (incl. CallEnded)
     return HTMLResponse(_barista_html(refresh or 15))
+
+
+# Test-call endpoint (async-safe)
+@http_router.get("/api/initiate_call")
+async def api_initiate_call():
+    try:
+        sid = await run_in_threadpool(_make_twilio_call)
+        return {"ok": True, "call_sid": sid}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
