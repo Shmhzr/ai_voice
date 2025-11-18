@@ -11,6 +11,7 @@ from fastapi.responses import Response, JSONResponse, HTMLResponse, StreamingRes
 from twilio.rest import Client
 from app import call
 import dotenv
+from .business_logic import normalize_phone
 dotenv.load_dotenv()
 from .orders_store import (
     list_recent_orders,
@@ -104,28 +105,31 @@ INDEX_HTML = """<!DOCTYPE html>
   <div class="card">
     <h1>🧋 AiPizza</h1>
     <p>AI Voice Ordering System</p>
-    <div class="grid">
-      <a class="tile" href="/orders">
-        <div class="t1">📺 Orders TV</div>
-        <div class="t2">Live order feed</div>
-        <code>/orders</code>
-      </a>
-      <a class="tile" href="/barista">
-        <div class="t1">☕ Barista Console</div>
-        <div class="t2">Manage orders</div>
-        <code>/barista</code>
-      </a>
-      <a class="tile" href="/orders.json">
-        <div class="t1">📋 Orders JSON</div>
-        <div class="t2">Orders data feed</div>
-        <code>/orders.json</code>
-      </a>
-      <div class="tile">
-        <div class="t1">☎️ Twilio Voice Webhook</div>
-        <div class="t2">Booking endpoint (Twilio calls this)</div>
-        <code>/voice</code>
-      </div>
-    </div>
+
+    # <div class="grid">
+    #   <a class="tile" href="/orders">
+    #     <div class="t1">📺 Orders TV</div>
+    #     <div class="t2">Live order feed</div>
+    #     <code>/orders</code>
+    #   </a>
+    #   <a class="tile" href="/barista">
+    #     <div class="t1">☕ Barista Console</div>
+    #     <div class="t2">Manage orders</div>
+    #     <code>/barista</code>
+    #   </a>
+    #   <a class="tile" href="/orders.json">
+    #     <div class="t1">📋 Orders JSON</div>
+    #     <div class="t2">Orders data feed</div>
+    #     <code>/orders.json</code>
+    #   </a>
+    #   <div class="tile">
+    #     <div class="t1">☎️ Twilio Voice Webhook</div>
+    #     <div class="t2">Booking endpoint (Twilio calls this)</div>
+    #     <code>/voice</code>
+    #   </div>
+    # </div>
+
+
   </div>
 </body>
 </html>
@@ -499,11 +503,53 @@ def barista(refresh: Optional[int] = Query(default=15, ge=0, le=120)):
     return HTMLResponse(_barista_html(refresh or 15))
 
 
+def _make_twilio_call_sync(to_phone: str) -> str:
+    """
+    Make a Twilio call synchronously and return call SID.
+    Reads TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_E164 from env.
+    """
+    account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    from_number = os.environ.get("TWILIO_FROM_E164")  # should be in +E.164 format
+    if not (account_sid and auth_token and from_number):
+        raise RuntimeError("Twilio credentials or FROM number not configured in environment")
+    client = Client(account_sid, auth_token)
+
+    # Example: use a simple TwiML URL or your voice webhook endpoint
+    # Replace with the URL your app exposes for Twilio voice instructions.
+    voice_url = os.environ.get("TWILIO_VOICE_URL", "https://your-domain.example/voice")
+
+    call = client.calls.create(
+        to=to_phone,
+        from_=from_number,
+        url=voice_url
+    )
+    return call.sid
+
 # Test-call endpoint (async-safe)
-@http_router.get("/api/initiate_call")
-async def api_initiate_call():
+@http_router.get("/api/initiate_call/{phone}")
+async def api_initiate_call(phone: str):
+    """
+    Initiate a phone call to the given phone number.
+    Phone may include a leading '+' (URL-encode it as %2B) or be provided without plus.
+    Examples:
+      GET /api/initiate_call/%2B911234567890
+      GET /api/initiate_call/911234567890
+      GET /api/initiate_call?phone=%2B911234567890  (see alternative below)
+    """
+    # normalize and validate phone
+    phone_norm = normalize_phone(phone)
+    if not phone_norm:
+        # try if phone was URL-encoded with spaces (some clients replace + with space)
+        alt = phone.replace(" ", "+")
+        phone_norm = normalize_phone(alt)
+    if not phone_norm:
+        raise HTTPException(status_code=400, detail=f"Invalid phone number: {phone}")
+
     try:
-        sid = await run_in_threadpool(_make_twilio_call)
-        return {"ok": True, "call_sid": sid}
+        # run Twilio call in thread pool so we don't block the event loop
+        sid = await run_in_threadpool(lambda: _make_twilio_call_sync(phone_norm))
+        return {"ok": True, "call_sid": sid, "to": phone_norm}
     except Exception as e:
+        # return 500 with useful message (avoid leaking secrets)
         raise HTTPException(status_code=500, detail=str(e))

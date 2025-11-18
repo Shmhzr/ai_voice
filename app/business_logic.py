@@ -2,6 +2,11 @@
 import re, time, random, asyncio
 from typing import Dict, List, Any, Optional, Tuple
 
+# HELPER FUNCTIONS:
+
+
+
+
 # --- Menu (pizzas, toppings, sizes, add-ons) ---
 MENU = {
     "flavors": ["Cheezy 7", "Las Vegas Treat", "Country Side", "La Pinoz Chicken Pizza"],
@@ -312,11 +317,34 @@ async def finalize_order(order_number: str, *, call_sid: str | None = None):
         if order_number not in PENDING_ORDERS:
             return {"ok": False, "error": "Pending order not found."}
         order = PENDING_ORDERS.pop(order_number)
+        # If items still in CART, prefer those (keeps final snapshot)
         if CART:
             order["items"] = CART.copy()
         order["committed"] = True
+        # ensure created_at exists
+        if "created_at" not in order:
+            order["created_at"] = int(time.time())
+        # ensure saved_at for DB trace
+        order.setdefault("saved_at", None)
+        # optionally compute a simple total if you don't have pricing yet
+        if "total" not in order:
+            # crude placeholder: no pricing available yet
+            order["total"] = None
+
         ORDERS[order_number] = order
         CART.clear()
+
+        # Persist order to orders.json using orders_store
+        try:
+            # import inside function to avoid import cycles
+            from .orders_store import add_order, now_iso
+            # append saved_at timestamp
+            order["saved_at"] = now_iso()
+            add_order(order)
+        except Exception as e:
+            # don't fail the finalize if file write has a transient error
+            return {"ok": True, **order, "warning": f"Failed to persist order: {e}"}
+
         return {"ok": True, **order}
 
 async def discard_pending_order(order_number: str, *, call_sid: str | None = None):
