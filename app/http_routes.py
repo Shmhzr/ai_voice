@@ -105,29 +105,29 @@ INDEX_HTML = """<!DOCTYPE html>
   <div class="card">
     <h1>🧋 AiPizza</h1>
     <p>AI Voice Ordering System</p>
-
-    # <div class="grid">
-    #   <a class="tile" href="/orders">
-    #     <div class="t1">📺 Orders TV</div>
-    #     <div class="t2">Live order feed</div>
-    #     <code>/orders</code>
-    #   </a>
-    #   <a class="tile" href="/barista">
-    #     <div class="t1">☕ Barista Console</div>
-    #     <div class="t2">Manage orders</div>
-    #     <code>/barista</code>
-    #   </a>
-    #   <a class="tile" href="/orders.json">
-    #     <div class="t1">📋 Orders JSON</div>
-    #     <div class="t2">Orders data feed</div>
-    #     <code>/orders.json</code>
-    #   </a>
-    #   <div class="tile">
-    #     <div class="t1">☎️ Twilio Voice Webhook</div>
-    #     <div class="t2">Booking endpoint (Twilio calls this)</div>
-    #     <code>/voice</code>
-    #   </div>
-    # </div>
+    <!--
+    <div class="grid">
+      <a class="tile" href="/orders">
+        <div class="t1">📺 Orders TV</div>
+        <div class="t2">Live order feed</div>
+        <code>/orders</code>
+      </a>
+      <a class="tile" href="/barista">
+        <div class="t1">☕ Barista Console</div>
+        <div class="t2">Manage orders</div>
+        <code>/barista</code>
+      </a>
+      <a class="tile" href="/orders.json">
+        <div class="t1">📋 Orders JSON</div>
+        <div class="t2">Orders data feed</div>
+        <code>/orders.json</code>
+      </a>
+      <div class="tile">
+        <div class="t1">☎️ Twilio Voice Webhook</div>
+        <div class="t2">Booking endpoint (Twilio calls this)</div>
+        <code>/voice</code>
+      </div>
+    </div>-->
 
 
   </div>
