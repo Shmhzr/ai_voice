@@ -9,7 +9,7 @@ from .events import publish  # NEW
 # ---------- Tool implementations (per-call) ----------
 async def _add_to_cart(flavor: str, toppings=None, sweetness: str | None = None,
                        ice: str | None = None, addons=None, *, call_sid: str | None = None):
-    return await bl.add_to_cart(flavor, toppings, sweetness, ice, addons, call_sid=call_sid)
+    return await bl.add_to_cart(flavor, toppings, call_sid=call_sid)
 
 async def _remove_from_cart(index: int, *, call_sid: str | None = None):
     return await bl.remove_from_cart(index, call_sid=call_sid)
@@ -93,7 +93,7 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
     # Cart ops
     {
         "name": "add_to_cart",
-        "description": "Add a drink to the cart (standard size).",
+        "description": "Add a menu item to the cart (standard size).",
         "parameters": {
             "type": "object",
             "properties": {

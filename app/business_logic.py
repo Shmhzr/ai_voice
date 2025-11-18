@@ -4,7 +4,7 @@ from typing import Dict, List, Any, Optional, Tuple
 
 # --- Menu (no pricing, no sizes - one standard size only) ---
 MENU = {
-    "flavors": ["Cheezy-7","Las Vegas Treat", "Country Side", "La Pinoz Chicken Pizza."],
+    "flavors": ["Cheezy 7","Las Vegas Treat", "Country Side", "La Pinoz Chicken Pizza."],
     "toppings": ["Paneer", "onion", "capsicum", "mushrooms", "sweet corn"],
     "addons": ["coke"],
 }

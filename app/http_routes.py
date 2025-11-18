@@ -126,7 +126,7 @@ async def voice_twiml(request: Request):
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Connecting you to the Deepgram Boba Rista.</Say>
+  <Say>Connecting you to the La Pinoz pizza.</Say>
   <Connect>
     <Stream url="{scheme}://{host}/twilio">
       <Parameter name="call_sid" value="{call_sid}"/>
