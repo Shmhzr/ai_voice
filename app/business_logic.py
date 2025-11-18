@@ -256,19 +256,39 @@ async def get_cart(call_sid: str | None = None):
 PHONE_RE = re.compile(r'\+?\d[\d\-\s()]{9,}\d')
 US_E164 = re.compile(r'^\+1\d{10}$')
 
+# replace existing normalize_phone with this version
+
+_PHONE_E164_GENERIC = re.compile(r'^\+\d{7,15}$')  # generic E.164-ish: +<7..15 digits>
+
 def normalize_phone(p: str | None) -> str | None:
+    """
+    Normalize a phone string to E.164-style (leading '+', digits only).
+    Accepts:
+      - '+918777684725' -> '+918777684725'
+      - '918777684725'  -> '+918777684725'
+      - '9877684725'    -> '+9877684725'   (will be treated as numeric with no country prefix)
+    Returns None for clearly invalid values.
+    """
     if not p:
         return None
+
+    # strip whitespace and common separators
+    p = p.strip()
     digits = re.sub(r'\D', '', p)
-    if len(digits) == 10:
-        return "+1" + digits
-    if len(digits) == 11 and digits.startswith("1"):
-        return "+1" + digits[1:]
-    if p.strip().startswith("+"):
-        candidate = "+" + digits
-        if US_E164.fullmatch(candidate):
+
+    # If original had a leading '+', prefer to return +digits (validate length)
+    if p.startswith('+'):
+        candidate = '+' + digits
+        if _PHONE_E164_GENERIC.fullmatch(candidate):
             return candidate
         return None
+
+    # If no leading '+', but digits length looks like an international/E.164 number (7-15 digits),
+    # return '+' + digits. This allows '918777684725' -> '+918777684725'.
+    if 7 <= len(digits) <= 15:
+        return '+' + digits
+
+    # otherwise invalid
     return None
 
 def random_order_no() -> str:
