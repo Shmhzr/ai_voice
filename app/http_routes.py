@@ -504,25 +504,26 @@ def barista(refresh: Optional[int] = Query(default=15, ge=0, le=120)):
 
 
 def _make_twilio_call_sync(to_phone: str) -> str:
-    """
-    Make a Twilio call synchronously and return call SID.
-    Reads TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_E164 from env.
-    """
-    account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
-    auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
-    from_number = os.environ.get("TWILIO_FROM_E164")  # should be in +E.164 format
-    if not (account_sid and auth_token and from_number):
-        raise RuntimeError("Twilio credentials or FROM number not configured in environment")
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_number = os.getenv("TWILIO_FROM_E164")
+    voice_host = os.getenv("VOICE_HOST")
+
     client = Client(account_sid, auth_token)
 
-    # Example: use a simple TwiML URL or your voice webhook endpoint
-    # Replace with the URL your app exposes for Twilio voice instructions.
-    voice_url = os.environ.get("TWILIO_VOICE_URL", "https://your-domain.example/voice")
+    print("📞 Initiating voice call simulation...")
+    print(f"From: {twilio_number}")
+    print(f"Webhook: https://{voice_host}/voice")
+
+    # Make the call
+    # In trial mode, you can only call verified numbers
+    # Use YOUR OWN PHONE NUMBER here
+    # your_verified_number = os.getenv("TWILIO_TO_E164", "+918777684725")
 
     call = client.calls.create(
-        to=to_phone,
-        from_=from_number,
-        url=voice_url
+        to=to_phone,  # Your own verified phone number
+        from_=twilio_number,      # Your Twilio number
+        url=f"https://{voice_host}/voice",  # Your webhook
     )
     return call.sid
 

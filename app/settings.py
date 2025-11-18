@@ -13,10 +13,11 @@ DG_API_KEY = os.getenv("DG_API_KEY")
 MENU_API_URL = os.getenv("MENU_API_URL")
 
 # Providers (defaults, can be overridden via env)
+
 AGENT_LANGUAGE = os.getenv("AGENT_LANGUAGE", "en-US")
-LISTEN_PROVIDER = os.getenv("LISTEN_PROVIDER", "deepgram")
-THINK_PROVIDER = os.getenv("THINK_PROVIDER", "openai")
-SPEAK_PROVIDER = os.getenv("SPEAK_PROVIDER", "elevenlabs")
+LISTEN_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_STT_MODEL", "flux-general-en")}
+THINK_PROVIDER  = {"type": "google",   "model": os.getenv("AGENT_THINK_MODEL", "gemini-2.0-flash")}
+SPEAK_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_TTS_MODEL", "aura-2-odysseus-en")}
 
 # Local fallback menu (import-time safe)
 LOCAL_MENU: Dict[str, Any] = {
@@ -169,10 +170,9 @@ MENU_API_URL = os.getenv("MENU_API_URL")
 
 # Providers (defaults, can be overridden via env)
 AGENT_LANGUAGE = os.getenv("AGENT_LANGUAGE", "en-US")
-LISTEN_PROVIDER = os.getenv("LISTEN_PROVIDER", "deepgram")
-THINK_PROVIDER = os.getenv("THINK_PROVIDER", "openai")
-SPEAK_PROVIDER = os.getenv("SPEAK_PROVIDER", "elevenlabs")
-
+LISTEN_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_STT_MODEL", "flux-general-en")}
+THINK_PROVIDER  = {"type": "google",   "model": os.getenv("AGENT_THINK_MODEL", "gemini-2.0-flash")}
+SPEAK_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_TTS_MODEL", "aura-2-odysseus-en")}
 # Local fallback menu (import-time safe)
 LOCAL_MENU: Dict[str, Any] = {
     "summary": "We offer a selection of pizzas with toppings and add-ons.",
