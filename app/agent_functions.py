@@ -1,15 +1,46 @@
 # app/agent_functions.py
 from typing import Any, Dict, Optional
 import asyncio
-
+from typing import List
 from . import business_logic as bl
 from .session import sessions
 from .events import publish  # NEW
 
 # ---------- Tool implementations (per-call) ----------
-async def _add_to_cart(flavor: str, toppings=None, sweetness: str | None = None,
-                       ice: str | None = None, addons=None, *, call_sid: str | None = None):
-    return await bl.add_to_cart(flavor, toppings, call_sid=call_sid)
+async def _add_to_cart(
+    customer_name: Optional[str] = None,
+    item: Optional[str] = None,
+    toppings: Optional[List[str]] = None,
+    address: Optional[str] = None,
+    *,
+    call_sid: Optional[str] = None
+):
+    """
+    Bridge between the agent/function call and business logic.
+
+    Expects parameters matching the Deepgram settings function schema:
+      - customer_name: name of the customer
+      - item: pizza flavor / item name
+      - toppings: list of toppings
+      - address: delivery address (optional)
+      - call_sid: optional Twilio/Call session id (keyword-only)
+
+    Forwards params to bl.add_to_cart. Adjust the argument names below
+    if your bl.add_to_cart expects a different signature.
+    """
+    # Normalize empty lists if needed
+    if toppings is None:
+        toppings = []
+
+    # Call your business logic. Pass named args so this stays robust
+    # if bl.add_to_cart changes parameter ordering.
+    return await bl.add_to_cart(
+        item,
+        toppings,
+        customer_name=customer_name,
+        address=address,
+        call_sid=call_sid,
+    )
 
 async def _remove_from_cart(index: int, *, call_sid: str | None = None):
     return await bl.remove_from_cart(index, call_sid=call_sid)
