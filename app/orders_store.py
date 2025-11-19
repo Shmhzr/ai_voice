@@ -7,12 +7,12 @@ ORDERS_PATH = os.path.join(BASE_DIR, "orders.json")
 _lock = threading.Lock()
 
 def init_store():
-    pass
-    # """Create a fresh orders.json with empty list every time server starts."""
-    # with _lock:
-    #     data = {"orders": []}
-    #     _write_unlocked(data)
-    # return ORDERS_PATH
+    # pass
+    """Create a fresh orders.json with empty list every time server starts."""
+    with _lock:
+        data = {"orders": []}
+        _write_unlocked(data)
+    return ORDERS_PATH
 
 def clear_store():
     """Wipe all orders (used on graceful shutdown)."""

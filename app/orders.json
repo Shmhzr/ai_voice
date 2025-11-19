@@ -1,3 +1,42 @@
 {
-  "orders": []
+  "orders": [
+    {
+      "order_number": "6387",
+      "items": [
+        {
+          "item": "La Pinoz Chicken Pizza",
+          "toppings": [
+            "mushrooms"
+          ],
+          "size": "Medium",
+          "customer_name": null,
+          "address": null
+        }
+      ],
+      "phone": "+9874422716",
+      "status": "received",
+      "created_at": 1763543265,
+      "committed": true,
+      "saved_at": "2025-11-19T09:08:15.689656",
+      "total": null
+    },
+    {
+      "order_number": "6387",
+      "phone": "+9874422716",
+      "items": [
+        {
+          "item": "La Pinoz Chicken Pizza",
+          "toppings": [
+            "mushrooms"
+          ],
+          "size": "Medium",
+          "customer_name": null,
+          "address": null
+        }
+      ],
+      "total": 0.0,
+      "status": "received",
+      "created_at": 1763543265
+    }
+  ]
 }
