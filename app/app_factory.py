@@ -18,8 +18,8 @@ def _setup_logging():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _setup_logging()
-    init_store()
+    _setup_logging() 
+    # init_store()
     print("🚀 Server starting, orders.json reset")
     try:
         yield

@@ -554,3 +554,21 @@ async def api_initiate_call(phone: str):
     except Exception as e:
         # return 500 with useful message (avoid leaking secrets)
         raise HTTPException(status_code=500, detail=str(e))
+    
+
+@http_router.get("/orderlist")
+def get_orders():
+    
+    file_path = os.path.join(os.getcwd(), "app","orders.json")
+    # return file_path
+
+    # Check if file exists
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="orders.json not found")
+
+    try:
+        with open(file_path, "r") as f:
+            data = _json.load(f)
+        return data
+    except _json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Invalid JSON format in orders.json")
