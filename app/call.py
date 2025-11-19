@@ -6,16 +6,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def trigger_test_call() -> str:
-    """
-    Place a Twilio call using environment variables:
-      - TWILIO_ACCOUNT_SID
-      - TWILIO_AUTH_TOKEN
-      - TWILIO_FROM_E164
-      - VOICE_HOST
-      - TWILIO_TO_E164   (destination)
-    Returns the Twilio Call SID on success.
-    Raises RuntimeError with a helpful message on failure.
-    """
+
+    # Place a Twilio call using environment variables:
+    #   TWILIO_ACCOUNT_SID
+    #   TWILIO_AUTH_TOKEN
+    #   TWILIO_FROM_E164
+    #   VOICE_HOST
+    #   TWILIO_TO_E164   (destination)
+    # Returns the Twilio Call SID on success.
+    # Raises RuntimeError with a helpful message on failure.
+
     account_sid = os.getenv("TWILIO_ACCOUNT_SID")
     auth_token = os.getenv("TWILIO_AUTH_TOKEN")
     twilio_number = os.getenv("TWILIO_FROM_E164")

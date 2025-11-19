@@ -12,6 +12,7 @@ from twilio.rest import Client
 from app import call
 import dotenv
 from .business_logic import normalize_phone
+from html import escape
 dotenv.load_dotenv()
 from .orders_store import (
     list_recent_orders,
@@ -558,17 +559,60 @@ async def api_initiate_call(phone: str):
 
 @http_router.get("/orderlist")
 def get_orders():
-    
     file_path = os.path.join(os.getcwd(), "app","orders.json")
-    # return file_path
+    with open(file_path, 'r', encoding='utf-8') as f:
+      data = _json.load(f)
+      orders = data['orders']
+      
 
-    # Check if file exists
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="orders.json not found")
+      table_header = (
+          "<tr>"
+          "<th>Order Number</th>"
+          "<th>Phone</th>"
+          "<th>Items</th>"
+          "<th>Total</th>"
+          "<th>Status</th>"
+          "<th>Created At</th>"
+          "</tr>"
+      )
 
-    try:
-        with open(file_path, "r") as f:
-            data = _json.load(f)
-        return data
-    except _json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Invalid JSON format in orders.json")
+      rows = []
+      for order in orders:
+          items = []
+          for item in order['items']:
+              t_str = ', '.join(item.get('toppings', []))
+              items.append(f"{escape(item['item'])} ({escape(item['size'])}) Toppings: {escape(t_str)}")
+          items_str = "<br>".join(items)
+          rows.append(
+              "<tr>"
+              f"<td>{escape(str(order.get('order_number', '')))}</td>"
+              f"<td>{escape(str(order.get('phone', '')))}</td>"
+              f"<td>{items_str}</td>"
+              f"<td>{escape(str(order.get('total', '')))}</td>"
+              f"<td>{escape(str(order.get('status', '')))}</td>"
+              f"<td>{escape(str(order.get('created_at', '')))}</td>"
+              "</tr>"
+          )
+
+      html_table = (
+          "<table border='1' cellpadding='8'>"
+          + table_header +
+          "".join(rows) +
+          "</table>"
+      )
+
+      return HTMLResponse(content=html_table)
+    
+    # file_path = os.path.join(os.getcwd(), "app","orders.json")
+    # # return file_path
+
+    # # Check if file exists
+    # if not os.path.exists(file_path):
+    #     raise HTTPException(status_code=404, detail="orders.json not found")
+
+    # try:
+    #     with open(file_path, "r") as f:
+    #         data = _json.load(f)
+    #     return data
+    # except _json.JSONDecodeError:
+    #     raise HTTPException(status_code=500, detail="Invalid JSON format in orders.json")
