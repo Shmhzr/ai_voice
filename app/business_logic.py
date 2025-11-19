@@ -377,8 +377,8 @@ async def checkout_order(phone: str | None = None, address: str | None = None, *
             "address": address,
         }
         PENDING_ORDERS[order_no] = order
-        finalize_order(order_no, call_sid=call_sid)  # auto-finalize on checkout
-        return {"ok": True, **order}
+    await finalize_order(order_no, call_sid=call_sid)  # auto-finalize on checkout
+    return {"ok": True, **order}
 
 async def finalize_order(order_number: str, *, call_sid: str | None = None):
     lock, CART, ORDERS, PENDING_ORDERS = _get_store(call_sid)

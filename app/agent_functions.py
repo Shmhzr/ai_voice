@@ -107,7 +107,7 @@ async def _checkout_order(phone: str | None = None, address: str | None = None, 
                 "type": "order_locked",
                 "order_number": s.order_number,
                 "call_sid": call_sid,
-                "address": getattr(s, "address", None),
+                "address": address,
             })
     return res
 
