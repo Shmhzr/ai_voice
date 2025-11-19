@@ -56,3 +56,4 @@ Containerfile~
 # Temporary files
 *.tmp
 *.temp
+orders.json
