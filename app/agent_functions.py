@@ -65,23 +65,52 @@ async def _get_cart(*, call_sid: str | None = None):
     return await bl.get_cart(call_sid=call_sid)
 
 
-async def _checkout_order(phone: str | None = None, *, call_sid: str | None = None):
+# async def _checkout_order(phone: str | None = None, *, call_sid: str | None = None):
+#     # Generate order number, but do not finalize.
+#     res = await bl.checkout_order(phone, call_sid=call_sid)
+#     if isinstance(res, dict) and res.get("ok"):
+#         s = await sessions.get_or_create(call_sid or "unknown")
+#         if res.get("phone"):
+#             s.phone = res["phone"]
+#         if res.get("address"):
+#             s.address = res["address"]
+#             # NOTE: do NOT auto-confirm here; explicit confirmation is required.
+#         if res.get("order_number"):
+#             s.order_number = res["order_number"]
+#             # Tell dashboards an order number was assigned (pre-finalize)
+#             await publish("orders", {
+#                 "type": "order_locked",
+#                 "order_number": s.order_number,
+#                 "call_sid": call_sid,
+#                 "address": s.address,
+#             })
+#     return res
+async def _checkout_order(phone: str | None = None, address: str | None = None, *, call_sid: str | None = None):
     # Generate order number, but do not finalize.
-    res = await bl.checkout_order(phone, call_sid=call_sid)
+    res = await bl.checkout_order(phone=phone, address=address, call_sid=call_sid)
     if isinstance(res, dict) and res.get("ok"):
         s = await sessions.get_or_create(call_sid or "unknown")
         if res.get("phone"):
             s.phone = res["phone"]
-            # NOTE: do NOT auto-confirm here; explicit confirmation is required.
+            s.phone_confirmed = False
+        # prefer the value returned by bl.checkout_order, but fall back to the passed address if needed
+        addr = res.get("address") if isinstance(res, dict) else None
+        if not addr and address:
+            addr = address
+        if addr:
+            s.address = addr
+            s.address_confirmed = False  # require explicit confirmation later
         if res.get("order_number"):
             s.order_number = res["order_number"]
-            # 🔔 Tell dashboards an order number was assigned (pre-finalize)
+            # Tell dashboards an order number was assigned (pre-finalize)
             await publish("orders", {
                 "type": "order_locked",
                 "order_number": s.order_number,
-                "call_sid": call_sid
+                "call_sid": call_sid,
+                "address": getattr(s, "address", None),
             })
     return res
+
 
 
 async def _order_status(phone: str | None = None, order_number: str | None = None,
@@ -128,6 +157,13 @@ async def _order_is_placed(*, call_sid: str | None = None):
     s = await sessions.get_or_create(call_sid or "unknown")
     placed = bool(s.order_number)
     return {"placed": placed, "order_number": s.order_number}
+
+async def _save_address(address: str, *, call_sid: str | None = None):
+    s = await sessions.get_or_create(call_sid or "unknown")
+    # minimal normalization/validation can be added in bl.normalize_address if you have one
+    s.address = address
+    s.address_confirmed = False
+    return {"ok": True, "address": address}
 
 
 # ---------- Tool definitions (Deepgram Agent expects this schema) ----------
@@ -209,6 +245,19 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
         "description": "Return whether an order number has been generated in this call session.",
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
+    {
+    "name": "save_address",
+    "description": "Save the customer's delivery address (not confirmed).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "address": {"type": "string"},
+            "call_sid": {"type": "string"}
+        },
+        "required": ["address"]
+    },
+},
+
 
     # Checkout / status
     {
@@ -216,7 +265,10 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
         "description": "Generate order number but don't finalize yet. Can be called once per order flow.",
         "parameters": {
             "type": "object",
-            "properties": {"phone": {"type": "string"}, "call_sid": {"type": "string"}},
+            "properties": {"phone": {"type": "string"}, 
+                           "call_sid": {"type": "string"},
+                            "address": {"type": "string", "description": "Delivery address (optional)."}
+                           },
             "required": [],
         },
     },
@@ -280,6 +332,8 @@ FUNCTION_MAP: dict[str, Any] = {
     "confirm_phone_number": _confirm_phone_number,  # NEW
     "confirm_pending_to_cart": _confirm_pending_to_cart,
     "clear_pending_item": _clear_pending_item,
+    "save_address": _save_address,
+
 }
 
 

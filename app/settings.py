@@ -147,11 +147,11 @@ def build_deepgram_settings(prompt: Optional[str] = None) -> Dict[str, Any]:
                 "3) Modify cart items (change flavor, toppings, size, quantity, add-ons). "
                 "4) Remove items from the cart if the customer changes their mind. "
                 "5) Read back the current cart so the customer can confirm the order. "
-                "6) Save and confirm the customer’s phone number for the order. "
+                "6) Save and confirm the customer’s phone number and address for the order. "
                 "7) Check whether an order has already been placed in this call session. "
                 "8) Begin checkout and generate an order number when the customer is ready to finalize. "
                 "9) Look up an order status by phone number or order number. "
-                "10) Extract phone numbers or order numbers from free-form speech when needed. "
+                "10) Extract phone numbers or order numbers or Order address from free-form speech when needed. "
 
                 "Your responsibilities: "
                 "- Be friendly, professional, and clear. "
@@ -208,6 +208,11 @@ def build_deepgram_settings(prompt: Optional[str] = None) -> Dict[str, Any]:
                                 "type": "integer", 
                                 "minimum": 1
                             },
+                            "address": 
+                            {
+                                "type": "string", 
+                                "description": "Full delivery address of customer including street, city, state, and zip code."
+                            },
                             "addons": 
                             {
                                 "type": "array", 
@@ -219,7 +224,7 @@ def build_deepgram_settings(prompt: Optional[str] = None) -> Dict[str, Any]:
                                 "description": "Optional Twilio call SID to bind this function call to a specific phone call/session."
                             }
                         },
-                        "required": ["flavor","size","quantity"],
+                        "required": ["flavor","size","quantity","call_sid"],
                     },
                 },
 
@@ -276,8 +281,8 @@ def build_deepgram_settings(prompt: Optional[str] = None) -> Dict[str, Any]:
                     "description": "Generate order number but don't finalize yet. Can be called once per order flow.",
                     "parameters": {
                         "type": "object",
-                        "properties": {"phone": {"type": "string"}, "call_sid": {"type": "string"}},
-                        "required": [],
+                        "properties": {"phone": {"type": "string"}, "address": {"type": "string"}},
+                        "required": ["phone","address"],
                     },
                 },
 
@@ -320,6 +325,16 @@ def build_deepgram_settings(prompt: Optional[str] = None) -> Dict[str, Any]:
                         "required": ["confirmed"],
                     },
                 },
+
+                {
+                    "name": "save_address",
+                    "description": "Save the customer's delivery address (not confirmed). Can be empty or omitted for pickup orders.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"address": {"type": "string"}, "call_sid": {"type": "string"}},
+                        "required": ["address"],
+                    }
+                }
 
             ],
         },

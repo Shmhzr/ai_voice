@@ -295,12 +295,59 @@ def random_order_no() -> str:
     n = random.randint(0, 9999)
     return f"{n:04d}"
 
-async def checkout_order(phone: str | None = None, *, call_sid: str | None = None):
+# async def checkout_order(phone: str | None = None, *, call_sid: str | None = None):
+#     lock, CART, _, PENDING_ORDERS = _get_store(call_sid)
+#     async with lock:
+#         if not CART:
+#             return {"ok": False, "error": "Cart is empty."}
+#         phone_norm = normalize_phone(phone) if phone else None
+#         if address is not None:
+#             address = address.strip() or None
+#         if phone_norm:
+#             from .orders_store import count_active_orders_for_phone
+#             active_orders = count_active_orders_for_phone(phone_norm)
+#             current_cart_size = len(CART)
+#             total_orders = active_orders + current_cart_size
+#             if total_orders > MAX_ORDERS_PER_PHONE:
+#                 return {
+#                     "ok": False,
+#                     "error": (f"You currently have {active_orders} active order(s). Adding {current_cart_size} more "
+#                               f"would exceed the limit of {MAX_ORDERS_PER_PHONE} active orders per phone number. "
+#                               f"Please wait for your current orders to be ready."),
+#                     "limit_reached": True,
+#                     "active_orders": active_orders,
+#                     "cart_pizzas": current_cart_size,
+#                     "max_allowed": MAX_ORDERS_PER_PHONE
+#                 }
+
+#         order_no = random_order_no()
+#         order = {
+#             "order_number": order_no,
+#             "items": CART.copy(),
+#             "phone": phone_norm,
+#             "status": "received",
+#             "created_at": int(time.time()),
+#             "committed": False,
+#             "address": address,
+#         }
+#         PENDING_ORDERS[order_no] = order
+#         return {"ok": True, **order}
+# business_logic.py — replace your existing checkout_order with this
+
+import time
+from typing import Optional
+
+async def checkout_order(phone: str | None = None, address: str | None = None, *, call_sid: str | None = None):
     lock, CART, _, PENDING_ORDERS = _get_store(call_sid)
     async with lock:
         if not CART:
             return {"ok": False, "error": "Cart is empty."}
+
         phone_norm = normalize_phone(phone) if phone else None
+
+        # normalize address early so it's defined and safe to reference later
+        if address is not None:
+            address = address.strip() or None
 
         if phone_norm:
             from .orders_store import count_active_orders_for_phone
@@ -327,8 +374,10 @@ async def checkout_order(phone: str | None = None, *, call_sid: str | None = Non
             "status": "received",
             "created_at": int(time.time()),
             "committed": False,
+            "address": address,
         }
         PENDING_ORDERS[order_no] = order
+        finalize_order(order_no, call_sid=call_sid)  # auto-finalize on checkout
         return {"ok": True, **order}
 
 async def finalize_order(order_number: str, *, call_sid: str | None = None):
