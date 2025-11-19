@@ -571,6 +571,7 @@ def get_orders():
           "<th>Phone</th>"
           "<th>Items</th>"
           "<th>Total</th>"
+          "<th>Address</th>"
           "<th>Status</th>"
           "<th>Created At</th>"
           "</tr>"
@@ -589,8 +590,9 @@ def get_orders():
               f"<td>{escape(str(order.get('phone', '')))}</td>"
               f"<td>{items_str}</td>"
               f"<td>{escape(str(order.get('total', '')))}</td>"
+              f"<td>{escape(str(order.get('address', '')))}</td>"
               f"<td>{escape(str(order.get('status', '')))}</td>"
-              f"<td>{escape(str(order.get('created_at', '')))}</td>"
+              f"<td>{escape(str(order.get('saved_at', '')))}</td>"
               "</tr>"
           )
 
