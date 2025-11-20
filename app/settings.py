@@ -17,7 +17,8 @@ MENU_API_URL = os.getenv("MENU_API_URL")
 AGENT_LANGUAGE = os.getenv("AGENT_LANGUAGE", "en-US")
 LISTEN_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_STT_MODEL", "flux-general-en")}
 THINK_PROVIDER  = {"type": "google",   "model": os.getenv("AGENT_THINK_MODEL", "gemini-2.0-flash")}
-SPEAK_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_TTS_MODEL", "aura-2-odysseus-en")}
+SPEAK_PROVIDER = {"type": "eleven_labs", "model_id": os.getenv("AGENT_TTS_MODEL","aura-2-helena-en"),
+        "voice_id": "cgSgspJ2msm6clMCkdW9"}
 
 # Local fallback menu (import-time safe)
 LOCAL_MENU: Dict[str, Any] = {
@@ -28,7 +29,6 @@ LOCAL_MENU: Dict[str, Any] = {
     "sizes": ["Small", "Medium", "Large"],
 }
 
-# --- Safe remote fetch helpers (do NOT call at import-time unless you mean to) ---
 def fetch_remote_menu(url: str, timeout: float = 3.0) -> Optional[Dict[str, Any]]:
     if not url:
         return None
@@ -344,11 +344,9 @@ def build_deepgram_settings(prompt: Optional[str] = None) -> Dict[str, Any]:
 }
 
 
-# Optional convenience: a cached default PROMPT (call at startup if you want)
 def get_default_prompt(force_refresh: bool = False) -> str:
     if force_refresh:
         global _cached_menu
         _cached_menu = None
     return build_prompt_from_menu()
 
-# Exported names: DG_API_KEY, build_deepgram_settings, get_menu, get_default_prompt
