@@ -17,8 +17,11 @@ MENU_API_URL = os.getenv("MENU_API_URL")
 AGENT_LANGUAGE = os.getenv("AGENT_LANGUAGE", "en-US")
 LISTEN_PROVIDER = {"type": "deepgram", "model": os.getenv("AGENT_STT_MODEL", "flux-general-en")}
 THINK_PROVIDER  = {"type": "google",   "model": os.getenv("AGENT_THINK_MODEL", "gemini-2.0-flash")}
-SPEAK_PROVIDER = {"type": "eleven_labs", "model_id": os.getenv("AGENT_TTS_MODEL","aura-2-helena-en"),
-        "voice_id": "cgSgspJ2msm6clMCkdW9"}
+SPEAK_PROVIDER = {
+        "type": "eleven_labs",
+        "model_id": os.getenv("AGENT_TTS_MODEL", "eleven_multilingual_v2"),
+        "voice_id": os.getenv("AGENT_TTS_VOICE", "cgSgspJ2msm6clMCkdW9")
+      }
 
 # Local fallback menu (import-time safe)
 LOCAL_MENU: Dict[str, Any] = {
