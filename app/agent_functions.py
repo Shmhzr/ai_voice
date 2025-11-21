@@ -6,11 +6,11 @@ from . import business_logic as bl
 from .session import sessions
 from .events import publish  # NEW
 
-# ---------- Tool implementations (per-call) ----------
+# Tool implementations (per-call)
 async def _add_to_cart(
     customer_name: Optional[str] = None,
     item: Optional[str] = None,
-    flavor: Optional[str] = None,            # accept model's "flavor"
+    flavor: Optional[str] = None,
     toppings: Optional[List[str]] = None,
     size: Optional[str] = None,
     quantity: Optional[int] = None,
@@ -18,11 +18,7 @@ async def _add_to_cart(
     *,
     call_sid: Optional[str] = None
 ):
-    """
-    Bridge between the agent/function call and business logic.
-    Accepts either `item` or `flavor` (model may send `flavor`).
-    Also accepts `size` and `quantity` for pizzas.
-    """
+    # Bridge between the agent/function call and business logic.
     # model sometimes sends `flavor` instead of `item`
     if not item and flavor:
         item = flavor
@@ -85,9 +81,9 @@ async def _get_cart(*, call_sid: str | None = None):
 #                 "address": s.address,
 #             })
 #     return res
-async def _checkout_order(phone: str | None = None, address: str | None = None, *, call_sid: str | None = None):
+async def _checkout_order(phone: str | None = None, address: str | None = None,order_type: str | None = None, *, call_sid: str | None = None):
     # Generate order number, but do not finalize.
-    res = await bl.checkout_order(phone=phone, address=address, call_sid=call_sid)
+    res = await bl.checkout_order(phone=phone, address=address,order_type=order_type, call_sid=call_sid)
     if isinstance(res, dict) and res.get("ok"):
         s = await sessions.get_or_create(call_sid or "unknown")
         if res.get("phone"):
@@ -164,6 +160,53 @@ async def _save_address(address: str, *, call_sid: str | None = None):
     s.address = address
     s.address_confirmed = False
     return {"ok": True, "address": address}
+
+async def _save_order_type(order_type: str, *, call_sid: str | None = None):
+    # Save the customer's order type (PICKUP or DELIVERY) for this active call/session before checkout.
+    res = await bl.save_order_type(order_type=order_type, call_sid=call_sid)
+    # bl.save_order_type returns normalized string or None
+    s = await sessions.get_or_create(call_sid or "unknown")
+    if res:
+        s.order_type = res  # mirror into session for agent-accessible state
+        # do not auto-confirm — let the agent explicitly confirm contact details later
+        s.order_type_confirmed = True  # optionally mark saved as confirmed (or set False if you prefer)
+        return {"ok": True, "order_type": res}
+    else:
+        return {"ok": False, "error": "Invalid order_type, expected pickup or delivery."}
+
+
+async def _get_order_type(*, call_sid: str | None = None):
+    # Retrieve the currently selected order type (pickup/delivery)
+    # for this active call/session before checkout.
+    ot = await bl.get_order_type(call_sid=call_sid)
+    if not ot:
+        return {
+            "ok": False,
+            "order_type": None,
+            "message": "No order type has been set yet for this order."
+        }
+    return {
+        "ok": True,
+        "order_type": ot,
+        "message": f"The order type is {ot}."
+    }
+# async def _get_order_type_from_json(order_number: str):
+#     """
+#     Retrieve the order type for a completed order from orders.json.
+#     """
+#     ot = bl.get_order_type_from_json(order_number)
+#     if ot is None:
+#         return {
+#             "ok": False,
+#             "order_type": None,
+#             "message": f"No order found with number {order_number}."
+#         }
+#     return {
+#         "ok": True,
+#         "order_type": ot,
+#         "message": f"Order {order_number} was a {ot} order."
+#     }
+
 
 
 # ---------- Tool definitions (Deepgram Agent expects this schema) ----------
@@ -265,13 +308,16 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
         "description": "Generate order number but don't finalize yet. Can be called once per order flow.",
         "parameters": {
             "type": "object",
-            "properties": {"phone": {"type": "string"}, 
-                           "call_sid": {"type": "string"},
-                            "address": {"type": "string", "description": "Delivery address (optional)."}
-                           },
-            "required": [],
+            "properties": {
+                "phone": {"type": "string"},
+                "address": {"type": "string", "description": "Delivery address (optional)."},
+                "order_type": {"type": "string", "description": "pickup | delivery"},
+                "call_sid": {"type": "string"}
+            },
+            "required": []
         },
     },
+
     {
         "name": "order_status",
         "description": "Look up order status by phone or order number.",
@@ -281,6 +327,31 @@ FUNCTION_DEFS: list[Dict[str, Any]] = [
             "required": [],
         },
     },
+    {
+    "name":"save_order_type",
+    "description":"Save the customer's order type (pickup or delivery) for this session.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "order_type": {"type": "string", "description": "pickup | delivery"},
+            "call_sid": {"type": "string"}
+        },
+        "required": ["order_type"]
+    }
+    },
+
+    {
+        "name": "get_order_type",
+        "description": "Get the current session's order type (PICKUP or DELIVERY).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "call_sid": {"type": "string"}
+            },
+            "required": []
+        }
+    },
+
     {
         "name": "extract_phone_and_order",
         "description": "Extract phone and 4-digit order number from free text.",
@@ -333,7 +404,8 @@ FUNCTION_MAP: dict[str, Any] = {
     "confirm_pending_to_cart": _confirm_pending_to_cart,
     "clear_pending_item": _clear_pending_item,
     "save_address": _save_address,
-
+    "get_order_type": _get_order_type,
+    "save_order_type": _save_order_type,
 }
 
 
