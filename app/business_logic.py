@@ -7,6 +7,7 @@ import os
 import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple, Set
+from .firebase_client import firebase_client
 
 from app import settings as settings_mod
 from .events import publish
@@ -649,7 +650,7 @@ async def checkout_order(phone: str | None = None, address: str | None = None,
 
 async def finalize_order(order_number: str, *, call_sid: str | None = None):
     lock, CART, ORDERS, PENDING_ORDERS = _get_store(call_sid)
-
+    await firebase_client.push("orderList", {order_number: PENDING_ORDERS.get(order_number)})
     add_order_fn = None
     now_iso_fn = None
     async with lock:
