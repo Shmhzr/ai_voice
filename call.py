@@ -26,8 +26,8 @@ print(f"Webhook: https://{voice_host}/voice")
 your_verified_number = os.getenv("TWILIO_TO_E164", "+918777684725")
 
 call = client.calls.create(
-    # to="+919007209713",
-    to="+918777684725",  # Your own verified phone number
+    to="+919007209713",
+    # to="+918777684725",  # Your own verified phone number
     from_=twilio_number,      # Your Twilio number
     url=f"https://{voice_host}/voice",  # Your webhook
 )

@@ -1,6 +1,16 @@
 # app/http_routes.py
-from fastapi.concurrency import run_in_threadpool
+from typing import Any, Dict
 
+from fastapi import APIRouter, HTTPException
+from starlette.status import (
+    HTTP_200_OK,
+    HTTP_201_CREATED,
+    HTTP_400_BAD_REQUEST,
+    HTTP_404_NOT_FOUND,
+    HTTP_500_INTERNAL_SERVER_ERROR,
+)
+from fastapi.concurrency import run_in_threadpool
+from .firebase_client import firebase_client
 import os
 import json as _json
 import asyncio
@@ -13,6 +23,7 @@ from app import call
 import dotenv
 from .business_logic import normalize_phone
 from html import escape
+from .schemas import PushResponse, SetResponse, GetResponse, GenericItem
 dotenv.load_dotenv()
 from .orders_store import (
     list_recent_orders,
@@ -618,3 +629,48 @@ def get_orders():
     #     return data
     # except _json.JSONDecodeError:
     #     raise HTTPException(status_code=500, detail="Invalid JSON format in orders.json")
+
+
+@http_router.get("/testpush/push", response_model=PushResponse, status_code=HTTP_201_CREATED)
+async def push_item():
+    try:
+        key = await firebase_client.push('abcdefgh', {"abc": 123})
+        return {"key": key}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@http_router.put("/{ref_path:path}/set", response_model=SetResponse)
+async def set_item(ref_path: str, item: GenericItem):
+    try:
+        await firebase_client.set(ref_path, item.data)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@http_router.get("/{ref_path:path}", response_model=GetResponse)
+async def get_item(ref_path: str):
+    try:
+        data = await firebase_client.get(ref_path)
+        return {"data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@http_router.patch("/{ref_path:path}/update", response_model=SetResponse)
+async def update_item(ref_path: str, item: GenericItem):
+    try:
+        if not isinstance(item.data, dict):
+            raise HTTPException(status_code=400, detail="update expects a dict")
+        await firebase_client.update(ref_path, item.data)
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@http_router.delete("/{ref_path:path}", response_model=SetResponse)
+async def delete_item(ref_path: str):
+    try:
+        await firebase_client.delete(ref_path)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
