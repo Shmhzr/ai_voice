@@ -8,12 +8,15 @@ import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple, Set
 from .firebase_client import firebase_client
-
+from decimal import Decimal , ROUND_HALF_UP
 from app import settings as settings_mod
 from .events import publish
 
 logger = logging.getLogger(__name__)
 
+BASE_TAX_RATE = Decimal("0.05")       # 5% base tax
+DELIVERY_FEE_AMOUNT = Decimal("40.00")
+PICKUP_DELIVERY_FEE = Decimal("0.00")
 # -------------------------
 # Matching helpers
 # -------------------------
@@ -392,6 +395,53 @@ def _price_for_cart_item(item_obj: dict, menu: dict) -> float:
         return float(detail.get("line_total", 0.0))
     except Exception:
         return 0.0
+    
+def _q(amount: Decimal) -> Decimal:
+    """Quantize to 2 decimals with round-half-up (financial rounding)."""
+    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+def apply_pricing_adjustments(subtotal: float, order_type: Optional[str] = None, promo_code: Optional[str] = None) -> Dict:
+    
+    if subtotal is None:
+        raise ValueError("subtotal is required")
+
+    # convert and validate
+    s = Decimal(str(subtotal))
+    if s < 0:
+        raise ValueError("subtotal must be non-negative")
+
+    # Determine delivery fee
+    is_pickup = (order_type is not None and str(order_type).strip().lower() == "pickup")
+    delivery_fee = PICKUP_DELIVERY_FEE if is_pickup else DELIVERY_FEE_AMOUNT
+
+    # Compute tax (simple percentage of subtotal here)
+    # Note: Modify rules here if tax should apply to (subtotal + delivery_fee) or be item-dependent.
+    tax = _q(s * BASE_TAX_RATE)
+
+    discount = Decimal("0.00")
+    # Compute discount from promo_code (example promos)
+    # discount = Decimal("0.00")
+    # if promo_code:
+    #     code = str(promo_code).strip().upper()
+    #     if code == "SAVE10":
+    #         discount = Decimal("10.00")           # flat ₹10 off
+    #     elif code == "PERC10":
+    #         discount = _q(s * Decimal("0.10"))   # 10% off subtotal
+    #     # add other promo rules here as elif branches
+
+    # Final total (not allowing negative total)
+    # total = s + tax + delivery_fee - discount
+
+    if total < 0:
+        total = Decimal("0.00")
+    total = _q(total)
+
+    return {
+        "tax": float(tax),
+        "delivery_fee": float(delivery_fee),
+        "discount": float(discount),
+        "total": float(total),
+    }
 
 # -------------------------
 # Menu summary
