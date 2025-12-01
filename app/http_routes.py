@@ -292,12 +292,98 @@ async def orders_events():
 
 # -------------------- UI Pages (Orders TV + Barista) --------------------
 
+# def _orders_tv_html(refresh: int) -> str:
+#     return f"""<!doctype html>
+# <html>
+# <head>
+#   <meta charset="utf-8" />
+#   <title>Boba Orders - Now Preparing</title>
+#   {_autorefresh_meta(refresh)}
+#   <style>
+#     :root {{ color-scheme: light dark; }}
+#     body {{ margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; background: #111; color:#fff; }}
+#     header {{ padding: 16px 24px; background: #222; border-bottom: 1px solid #333; display:flex; align-items:center; gap:10px; }}
+#     h1 {{ margin: 0; font-size: 22px; }}
+#     .muted {{ color:#aaa; font-size:12px; margin-left:auto; }}
+#     .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }}
+#     .card {{ background: #1b1b1b; border: 1px solid #333; border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 1px 8px rgba(0,0,0,0.25); }}
+#     .ord {{ font-size: 64px; letter-spacing: 2px; font-weight: 900; }}
+#   </style>
+# </head>
+# <body>
+#   <header>
+#     <h1>💈 Appointments - Booking Schedule</h1>
+#     <div class="muted">Auto refresh: {refresh or 15}s • Live via SSE</div>
+#   </header>
+#   <main>
+#     <div id="grid" class="grid"></div>
+#   </main>
+#   <script>
+#     const grid = document.getElementById('grid');
+
+#     function render(list){{
+#       grid.innerHTML = '';
+#       if(!list || list.length === 0){{
+#         const div = document.createElement('div');
+#         div.style.gridColumn = '1 / -1';
+#         div.style.color = '#aaa';
+#         div.style.padding = '80px 16px';
+#         div.style.textAlign = 'center';
+#         div.textContent = ' ';
+#         grid.appendChild(div);
+#         return;
+#       }}
+#       for(const o of list){{
+#         const card = document.createElement('div');
+#         card.className = 'card';
+#         card.innerHTML = '<div class="ord">' + (o.order_number || '----') + '</div>' +
+#                          '<div style="margin-top:6px;color:#aaa;">' + (o.status || '') + '</div>';
+#         grid.appendChild(card);
+#       }}
+#     }}
+
+#     async function load() {{
+#       const res = await fetch('/orders/in_progress.json', {{ cache: 'no-store' }});
+#       render(await res.json());
+#     }}
+
+#     function startSSE() {{
+#       const es = new EventSource('/orders/events');
+#       es.onopen = () => {{
+#         // Pull latest state immediately on (re)connect
+#         load();
+#       }};
+#       es.onmessage = (ev) => {{
+#         try {{
+#           const msg = JSON.parse(ev.data);
+#           if (msg.type === 'order_created' ||
+#               msg.type === 'order_status_changed' ||
+#               msg.type === 'CallEnded') {{
+#             load();
+#           }}
+#           // ignore 'ping'
+#         }} catch(e) {{}}
+#       }};
+#       es.onerror = () => {{
+#         // Browser will auto-reconnect; do a one-off reload for safety
+#         load();
+#       }};
+#     }}
+
+#     load(); startSSE();
+#     const REFRESH = {refresh or 15};
+#     if (REFRESH > 0) setInterval(load, REFRESH * 1000);
+#   </script>
+# </body>
+# </html>"""
+
+
 def _orders_tv_html(refresh: int) -> str:
     return f"""<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Boba Orders - Now Preparing</title>
+  <title>Pizza Orders - Now Preparing</title>
   {_autorefresh_meta(refresh)}
   <style>
     :root {{ color-scheme: light dark; }}
@@ -305,14 +391,16 @@ def _orders_tv_html(refresh: int) -> str:
     header {{ padding: 16px 24px; background: #222; border-bottom: 1px solid #333; display:flex; align-items:center; gap:10px; }}
     h1 {{ margin: 0; font-size: 22px; }}
     .muted {{ color:#aaa; font-size:12px; margin-left:auto; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; padding: 24px; }}
-    .card {{ background: #1b1b1b; border: 1px solid #333; border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 1px 8px rgba(0,0,0,0.25); }}
-    .ord {{ font-size: 64px; letter-spacing: 2px; font-weight: 900; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; padding: 24px; }}
+    .card {{ background: #1b1b1b; border: 1px solid #333; border-radius: 12px; padding: 18px; text-align: left; box-shadow: 0 1px 8px rgba(0,0,0,0.25); }}
+    .ord {{ font-size: 36px; letter-spacing: 1px; font-weight: 900; }}
+    .meta {{ color:#aaa; margin-top:8px; font-size:13px; }}
+    .small {{ color:#bbb; font-size:12px; margin-top:6px; }}
   </style>
 </head>
 <body>
   <header>
-    <h1>💈 Appointments - Booking Schedule</h1>
+    <h1>🍕 Pizza Orders - Now Preparing</h1>
     <div class="muted">Auto refresh: {refresh or 15}s • Live via SSE</div>
   </header>
   <main>
@@ -321,7 +409,28 @@ def _orders_tv_html(refresh: int) -> str:
   <script>
     const grid = document.getElementById('grid');
 
-    function render(list){{
+    function fmtDetails(order) {{
+      if (!order || !Array.isArray(order.items) || order.items.length === 0) return '—';
+      return order.items.map((it) => {{
+        const name = it.item || it.name || it.flavor || 'Pizza';
+        const size = it.size || it.size_label || '';
+        const toppings = (it.toppings && it.toppings.length) ? it.toppings.join(', ') : 'no toppings';
+        const addons = (it.addons && it.addons.length) ? ' • Addons: ' + it.addons.join(', ') : '';
+
+        return `
+          <div>
+            <strong>${{name}}</strong>
+            ${{size ? ' • ' + size : ''}}
+            <br/>
+            <small>${{toppings}}${{addons}}</small>
+          </div>
+        `;
+      }}).join('<hr style="opacity:0.06;margin:8px 0;">');
+    }}
+
+    async function load() {{
+      const res = await fetch('/orders/in_progress.json', {{ cache: 'no-store' }});
+      const list = await res.json();
       grid.innerHTML = '';
       if(!list || list.length === 0){{
         const div = document.createElement('div');
@@ -329,45 +438,41 @@ def _orders_tv_html(refresh: int) -> str:
         div.style.color = '#aaa';
         div.style.padding = '80px 16px';
         div.style.textAlign = 'center';
-        div.textContent = ' ';
+        div.textContent = 'No active pizza orders';
         grid.appendChild(div);
         return;
       }}
-      for(const o of list){{
+      for (const o of list) {{
         const card = document.createElement('div');
         card.className = 'card';
-        card.innerHTML = '<div class="ord">' + (o.order_number || '----') + '</div>' +
-                         '<div style="margin-top:6px;color:#aaa;">' + (o.status || '') + '</div>';
+        const phone = o.phone || o.customer_phone || '—';
+        const details = fmtDetails(o);
+        const addr = o.address ? `<div class="small">📍 ${{o.address}}</div>` : '';
+        const total = (o.total !== undefined && o.total !== null) ? `<div class="small">💰 ${{o.total}}</div>` : '';
+
+        card.innerHTML =
+            `<div class="ord">${{o.order_number || '----'}}</div>
+             <div class="meta">${{o.status || ''}} • ${{phone}}</div>
+             <div style="margin-top:10px;color:#ddd;">${{details}}</div>
+             ${{addr}}
+             ${{total}}`;
+
         grid.appendChild(card);
       }}
     }}
 
-    async function load() {{
-      const res = await fetch('/orders/in_progress.json', {{ cache: 'no-store' }});
-      render(await res.json());
-    }}
-
     function startSSE() {{
       const es = new EventSource('/orders/events');
-      es.onopen = () => {{
-        // Pull latest state immediately on (re)connect
-        load();
-      }};
+      es.onopen = () => {{ load(); }};
       es.onmessage = (ev) => {{
         try {{
           const msg = JSON.parse(ev.data);
-          if (msg.type === 'order_created' ||
-              msg.type === 'order_status_changed' ||
-              msg.type === 'CallEnded') {{
+          if (msg.type === 'order_created' || msg.type === 'order_status_changed' || msg.type === 'CallEnded') {{
             load();
           }}
-          // ignore 'ping'
         }} catch(e) {{}}
       }};
-      es.onerror = () => {{
-        // Browser will auto-reconnect; do a one-off reload for safety
-        load();
-      }};
+      es.onerror = () => {{ load(); }};
     }}
 
     load(); startSSE();
@@ -377,12 +482,141 @@ def _orders_tv_html(refresh: int) -> str:
 </body>
 </html>"""
 
+
+# def _barista_html(refresh: int) -> str:
+#     return f"""<!doctype html>
+# <html>
+# <head>
+#   <meta charset="utf-8" />
+#   <title>Barista Console</title>
+#   {_autorefresh_meta(refresh)}
+#   <style>
+#     :root{{ color-scheme: light dark; }}
+#     body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin:24px; }}
+#     h1 {{ margin: 0 0 8px; }}
+#     .muted {{ color:#777; font-size: 12px; margin: 0 0 14px; }}
+#     table {{ width: 100%; border-collapse: collapse; }}
+#     th, td {{ border-bottom: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }}
+#     tr:hover {{ background: rgba(0,0,0,0.04); }}
+#     button {{ padding: 6px 12px; border-radius: 8px; border: 1px solid #999; cursor: pointer; }}
+#     .detail-item {{ margin: 0 0 6px; line-height: 1.25; }}
+#     .nowrap {{ white-space: nowrap; }}
+#   </style>
+# </head>
+# <body>
+#   <h1>💈 Reception Desk</h1>
+#   <p class="muted">Confirm appointments and send customer notifications. Auto refresh: {refresh or 15}s • Live via SSE</p>
+
+#   <table id="tbl">
+#     <thead>
+#       <tr>
+#         <th class="nowrap">Appointment #</th>
+#         <th>Phone</th>
+#         <th>Details</th>
+#         <th>Status</th>
+#         <th>Action</th>
+#       </tr>
+#     </thead>
+#     <tbody></tbody>
+#   </table>
+
+#   <script>
+#     const tbody = document.querySelector('#tbl tbody');
+
+#     function fmtDetails(order) {{
+#       if (!order || !Array.isArray(order.items) || order.items.length === 0) return '—';
+#       return order.items.map((it) => {{
+#         const flavor = it.flavor || 'unknown';
+#                const toppings = (it.toppings && it.toppings.length) ? it.toppings.join(', ') : 'no toppings';
+#         const sweet = it.sweetness || '50%';
+#         const ice = it.ice || 'regular ice';
+#         return `<div class="detail-item"><strong>${{flavor}}</strong><br/><small>${{toppings}} • ${{sweet}}, ${{ice}}</small></div>`;
+#       }}).join('');
+#     }}
+
+#     async function load() {{
+#       const res = await fetch('/orders/in_progress.json', {{ cache: 'no-store' }});
+#       const list = await res.json();
+#       tbody.innerHTML = '';
+#       for (const o of list) {{
+#         const tr = document.createElement('tr');
+#         tr.innerHTML = `
+#           <td class="nowrap"><strong>${{o.order_number}}</strong></td>
+#           <td data-phone>—</td>
+#           <td data-details style="color:#777;">Loading…</td>
+#           <td>${{o.status || ''}}</td>
+#           <td data-done="${{o.order_number}}">Confirmed</td>
+#         `;
+#         tbody.appendChild(tr);
+
+#         // Fill phone
+#         fetch('/api/orders/phone/' + o.order_number, {{ cache: 'no-store' }})
+#           .then(r => r.json())
+#           .then(d => {{ tr.querySelector('[data-phone]').textContent = d.phone || '—'; }})
+#           .catch(() => {{ tr.querySelector('[data-phone]').textContent = '—'; }});
+
+#         // Fill details
+#         fetch('/api/orders/' + o.order_number, {{ cache: 'no-store' }})
+#           .then(r => r.ok ? r.json() : null)
+#           .then(order => {{
+#             tr.querySelector('[data-details]').innerHTML = order ? fmtDetails(order) : '—';
+#           }})
+#           .catch(() => {{ tr.querySelector('[data-details]').textContent = '—'; }});
+#       }}
+#     }}
+
+#     tbody.addEventListener('click', async (e) => {{
+#       const btn = e.target.closest('button[data-done]');
+#       if (!btn) return;
+#       const order = btn.getAttribute('data-done');
+#       btn.disabled = true; btn.textContent = 'Sending...';
+#       try {{
+#         const res = await fetch('/api/orders/' + order + '/done', {{ method: 'POST' }});
+#         if (!res.ok) throw new Error('Failed');
+#         btn.textContent = 'Sent ✅';
+#         setTimeout(load, 600);
+#         catch (e) {{
+#         btn.textContent = 'Error';
+#       }}
+#     }});
+
+#     function startSSE() {{
+#       const es = new EventSource('/orders/events');
+#       es.onopen = () => {{
+#         // Pull latest state immediately on (re)connect
+#         load();
+#       }};
+#       es.onmessage = (ev) => {{
+#         try {{
+#           const msg = JSON.parse(ev.data);
+#           if (msg.type === 'order_created' ||
+#               msg.type === 'order_status_changed' ||
+#               msg.type === 'CallEnded') {{
+#             load();
+#           }}
+#           // ignore 'ping'
+#         }} catch(e) {{}}
+#       }};
+#       es.onerror = () => {{
+#         // Browser auto-reconnects; do a one-off reload for safety
+#         load();
+#       }};
+#     }}
+
+#     load(); startSSE();
+#     const REFRESH = {refresh or 15};
+#     if (REFRESH > 0) setInterval(load, REFRESH * 1000);
+#   </script>
+# </body>
+# </html>"""
+
+
 def _barista_html(refresh: int) -> str:
     return f"""<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Barista Console</title>
+  <title>Pizza Kitchen Console</title>
   {_autorefresh_meta(refresh)}
   <style>
     :root{{ color-scheme: light dark; }}
@@ -391,22 +625,25 @@ def _barista_html(refresh: int) -> str:
     .muted {{ color:#777; font-size: 12px; margin: 0 0 14px; }}
     table {{ width: 100%; border-collapse: collapse; }}
     th, td {{ border-bottom: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }}
-    tr:hover {{ background: rgba(0,0,0,0.04); }}
-    button {{ padding: 6px 12px; border-radius: 8px; border: 1px solid #999; cursor: pointer; }}
-    .detail-item {{ margin: 0 0 6px; line-height: 1.25; }}
+    tr:hover {{ background: rgba(0,0,0,0.02); }}
+    button {{ padding: 8px 12px; border-radius: 8px; border: 1px solid #999; cursor: pointer; }}
+    .detail-item {{ margin: 0 0 6px; line-height: 1.25; color:#333; }}
     .nowrap {{ white-space: nowrap; }}
+    .small {{ color:#555; font-size:13px; }}
   </style>
 </head>
 <body>
-  <h1>💈 Reception Desk</h1>
-  <p class="muted">Confirm appointments and send customer notifications. Auto refresh: {refresh or 15}s • Live via SSE</p>
+  <h1>🍕 Pizza Kitchen Console</h1>
+  <p class="muted">Confirm orders and notify customers. Auto refresh: {refresh or 15}s • Live via SSE</p>
 
   <table id="tbl">
     <thead>
       <tr>
-        <th class="nowrap">Appointment #</th>
+        <th class="nowrap">Order #</th>
         <th>Phone</th>
         <th>Details</th>
+        <th>Total</th>
+        <th>Address</th>
         <th>Status</th>
         <th>Action</th>
       </tr>
@@ -420,11 +657,11 @@ def _barista_html(refresh: int) -> str:
     function fmtDetails(order) {{
       if (!order || !Array.isArray(order.items) || order.items.length === 0) return '—';
       return order.items.map((it) => {{
-        const flavor = it.flavor || 'unknown';
-               const toppings = (it.toppings && it.toppings.length) ? it.toppings.join(', ') : 'no toppings';
-        const sweet = it.sweetness || '50%';
-        const ice = it.ice || 'regular ice';
-        return `<div class="detail-item"><strong>${{flavor}}</strong><br/><small>${{toppings}} • ${{sweet}}, ${{ice}}</small></div>`;
+        const name = it.item || it.name || it.flavor || 'Pizza';
+        const size = it.size || it.size_label || '';
+        const toppings = (it.toppings && it.toppings.length) ? it.toppings.join(', ') : 'no toppings';
+        const addons = (it.addons && it.addons.length) ? ' • Addons: ' + it.addons.join(', ') : '';
+        return `<div class="detail-item"><strong>${{name}}</strong> ${{size ? '<span class="small"> • ' + size + '</span>' : ''}}<br/><small>${{toppings}}${{addons}}</small></div>`;
       }}).join('');
     }}
 
@@ -434,67 +671,58 @@ def _barista_html(refresh: int) -> str:
       tbody.innerHTML = '';
       for (const o of list) {{
         const tr = document.createElement('tr');
+        const phoneCell = o.phone || o.customer_phone || '—';
+        const totalCell = (o.total !== undefined && o.total !== null) ? o.total : '—';
+        const addressCell = o.address || '—';
         tr.innerHTML = `
           <td class="nowrap"><strong>${{o.order_number}}</strong></td>
-          <td data-phone>—</td>
-          <td data-details style="color:#777;">Loading…</td>
+          <td>${{phoneCell}}</td>
+          <td style="color:#333;">Loading…</td>
+          <td>${{totalCell}}</td>
+          <td>${{addressCell}}</td>
           <td>${{o.status || ''}}</td>
-          <td data-done="${{o.order_number}}">Confirmed</td>
+          <td><button data-done="${{o.order_number}}">Mark Ready</button></td>
         `;
         tbody.appendChild(tr);
-
-        // Fill phone
-        fetch('/api/orders/phone/' + o.order_number, {{ cache: 'no-store' }})
-          .then(r => r.json())
-          .then(d => {{ tr.querySelector('[data-phone]').textContent = d.phone || '—'; }})
-          .catch(() => {{ tr.querySelector('[data-phone]').textContent = '—'; }});
 
         // Fill details
         fetch('/api/orders/' + o.order_number, {{ cache: 'no-store' }})
           .then(r => r.ok ? r.json() : null)
           .then(order => {{
-            tr.querySelector('[data-details]').innerHTML = order ? fmtDetails(order) : '—';
+            tr.querySelector('td:nth-child(3)').innerHTML = order ? fmtDetails(order) : '—';
           }})
-          .catch(() => {{ tr.querySelector('[data-details]').textContent = '—'; }});
+          .catch(() => {{ tr.querySelector('td:nth-child(3)').textContent = '—'; }});
       }}
     }}
 
     tbody.addEventListener('click', async (e) => {{
       const btn = e.target.closest('button[data-done]');
       if (!btn) return;
-      const order = btn.getAttribute('data-done');
+      const orderNo = btn.getAttribute('data-done');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {{
-        const res = await fetch('/api/orders/' + order + '/done', {{ method: 'POST' }});
+        const res = await fetch('/api/orders/' + orderNo + '/done', {{ method: 'POST' }});
         if (!res.ok) throw new Error('Failed');
         btn.textContent = 'Sent ✅';
         setTimeout(load, 600);
-        catch (e) {{
+      }} catch (err) {{
         btn.textContent = 'Error';
+        btn.disabled = false;
       }}
     }});
 
     function startSSE() {{
       const es = new EventSource('/orders/events');
-      es.onopen = () => {{
-        // Pull latest state immediately on (re)connect
-        load();
-      }};
+      es.onopen = () => {{ load(); }};
       es.onmessage = (ev) => {{
         try {{
           const msg = JSON.parse(ev.data);
-          if (msg.type === 'order_created' ||
-              msg.type === 'order_status_changed' ||
-              msg.type === 'CallEnded') {{
+          if (msg.type === 'order_created' || msg.type === 'order_status_changed' || msg.type === 'CallEnded') {{
             load();
           }}
-          // ignore 'ping'
         }} catch(e) {{}}
       }};
-      es.onerror = () => {{
-        // Browser auto-reconnects; do a one-off reload for safety
-        load();
-      }};
+      es.onerror = () => {{ load(); }};
     }}
 
     load(); startSSE();
@@ -503,6 +731,7 @@ def _barista_html(refresh: int) -> str:
   </script>
 </body>
 </html>"""
+
 
 @http_router.get("/orders")
 def orders_tv(refresh: Optional[int] = Query(default=15, ge=0, le=120)):
